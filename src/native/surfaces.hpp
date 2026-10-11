@@ -1,0 +1,67 @@
+#pragma once
+
+#include "cup.hpp"
+#include "list.hpp"
+#include "played.hpp"
+#include "played_hooks.hpp"
+#include "surface_hooks.hpp"
+
+namespace point_zero::native {
+// The fixed surface part of the final native adapter. It does not publish the
+// feature, own/release packages, or substitute for required browsing/mode work.
+// Modules, catalogue, shared state and host wrapper outlive this object.
+class NativeSurfaces final {
+public:
+    static constexpr std::array families{CupRenderer::family, ListRenderer::family, PlayedRenderer::family};
+    using AssetSlots = std::array<std::uintptr_t, families.size()>;
+    explicit NativeSurfaces(const AdapterContext&) noexcept;
+    ~NativeSurfaces() noexcept;
+    NativeSurfaces(const NativeSurfaces&) = delete;
+    NativeSurfaces& operator=(const NativeSurfaces&) = delete;
+    NativeSurfaces(NativeSurfaces&&) = delete;
+    NativeSurfaces& operator=(NativeSurfaces&&) = delete;
+
+    // One attempt on the initialization/native thread. Admit all selected
+    // surface calls/sites, construct renderers and create disabled hooks.
+    void prepare();
+    static std::span<const std::string_view> asset_families() noexcept;
+    // Same thread, still preparing. The span may also contain other adapters'
+    // packages. Require each surface family exactly once with distinct slots;
+    // preload all artwork, then arm every hook.
+    void activate(std::span<const LoadedAsset>);
+    // Fixed adapter path: distinct nonzero slots already resolved by family.
+    void activate(const AssetSlots&);
+    // At the serialized prepublication boundary, including after another
+    // component arms. This only checks owned hook integrity, not readiness.
+    bool intact() const noexcept;
+    // Prepublication only; retires callbacks first. False means native effects
+    // cannot be certified for package release. Never unhooks or releases assets.
+    bool rollback() noexcept;
+    // Externally serialized after initialization has drained; may race native
+    // calls. Never call from a callback/native scope. Idempotent, no native edits.
+    void retire_callbacks() noexcept;
+
+private:
+    AdapterContext context_;
+    std::unique_ptr<CupRenderer> cup_;
+    std::unique_ptr<ListRenderer> list_;
+    std::unique_ptr<PlayedRenderer> played_;
+    // Reverse destruction and explicit drain keep bitmap forwarding alive
+    // throughout every entered played capture/named scope.
+    std::unique_ptr<SurfaceHooks> surface_hooks_;
+    std::unique_ptr<ListHook> list_hook_;
+    std::unique_ptr<ListTitleHook> title_hook_;
+    std::unique_ptr<PlayedHooks> played_hooks_;
+    SurfaceHooks::Bitmap stock_bitmap_{};
+    enum class ArmState { unattempted, attempted, armed };
+    std::array<ArmState, 4> arms_{};
+    std::uint32_t thread_{};
+    bool prepare_attempted_{}, prepared_{}, activation_attempted_{}, retired_{};
+
+    void preparing() const;
+    void begin_activation();
+    void activate_slots(const AssetSlots&);
+    static SurfaceHooks::Callbacks bitmap_callbacks() noexcept;
+    static PlayedHooks::Callbacks played_callbacks() noexcept;
+};
+} // namespace point_zero::native

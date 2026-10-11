@@ -1,0 +1,6 @@
+#include "loader/settings.hpp"
+namespace point_zero::loader {
+ReleaseSettings release_settings() {
+    return {"@POINT_ZERO_UPDATE_REPOSITORY@"};
+}
+}
