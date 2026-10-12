@@ -44,9 +44,10 @@ Handle directory(const fs::path& p) {
     Handle h(CreateFileW(p.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
                         nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (h.value == INVALID_HANDLE_VALUE) failure("pin owned directory");
-    FILE_ATTRIBUTE_TAG_INFO info{};
-    if (!GetFileInformationByHandleEx(h.value, FileAttributeTagInfo, &info, sizeof(info))) failure("inspect owned directory");
-    require((info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT),
+    // Only attributes are needed; FileAttributeTagInfo is unsupported on FAT.
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(h.value, &info)) failure("inspect owned directory");
+    require((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT),
             "owned parent must be a plain directory");
     return h;
 }
@@ -74,9 +75,9 @@ FilePin::FilePin(const fs::path& path, const std::atomic_bool* cancelled, bool a
     impl_->handle = Handle(CreateFileW(path.c_str(), GENERIC_READ | (allow_removal ? DELETE : 0), FILE_SHARE_READ, nullptr,
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (impl_->handle.value == INVALID_HANDLE_VALUE) failure("pin file");
-    FILE_ATTRIBUTE_TAG_INFO info{};
-    if (!GetFileInformationByHandleEx(impl_->handle.value, FileAttributeTagInfo, &info, sizeof(info))) failure("inspect pinned file");
-    require(!(info.FileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)), "expected plain pinned file");
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(impl_->handle.value, &info)) failure("inspect pinned file");
+    require(!(info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)), "expected plain pinned file");
 }
 FilePin::~FilePin() = default;
 FilePin::FilePin(FilePin&&) noexcept = default;
