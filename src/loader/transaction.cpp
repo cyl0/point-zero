@@ -215,8 +215,13 @@ struct Transaction::Impl {
         for (const auto& artifact : out->release.files) {
             if (!candidate && artifact.role == Role::ratings) continue;
             auto file = files.pin(prefix + artifact.path);
-            require(file->size() == artifact.bytes, "release artifact length mismatch");
-            require(digest(file->read(data_limit), cancelled) == artifact.sha256, "release artifact hash mismatch");
+            const auto actual_bytes = file->size();
+            if (actual_bytes != artifact.bytes)
+                throw std::runtime_error("release artifact length mismatch: " + artifact.path +
+                    " (expected " + std::to_string(artifact.bytes) + " bytes, found " +
+                    std::to_string(actual_bytes) + " bytes)");
+            if (digest(file->read(data_limit), cancelled) != artifact.sha256)
+                throw std::runtime_error("release artifact hash mismatch: " + artifact.path);
             out->pins.push_back(std::move(file));
         }
         return out;
