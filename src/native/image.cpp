@@ -61,6 +61,8 @@ ImageInfo inspect_image(MemoryView memory, std::uintptr_t base) {
         nt.OptionalHeader.SizeOfImage < nt.OptionalHeader.SizeOfHeaders)
         invalid("invalid native image/header extent");
     ImageInfo result{{base, nt.OptionalHeader.SizeOfImage}, {}};
+    result.timestamp = nt.FileHeader.TimeDateStamp;
+    result.entry_rva = nt.OptionalHeader.AddressOfEntryPoint;
     for (std::size_t i = 0; i < nt.OptionalHeader.NumberOfRvaAndSizes; ++i)
         result.directories[i] = {nt.OptionalHeader.DataDirectory[i].VirtualAddress, nt.OptionalHeader.DataDirectory[i].Size};
     constexpr std::array<std::size_t, 2> selected_directories{IMAGE_DIRECTORY_ENTRY_IMPORT, IMAGE_DIRECTORY_ENTRY_EXPORT};

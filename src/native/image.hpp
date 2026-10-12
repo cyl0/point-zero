@@ -12,6 +12,7 @@ struct ImageInfo {
     ImageRange range;
     // Import/export metadata is validated; other entries are copied for fixtures.
     std::array<ImageDirectory, 16> directories{};
+    std::uint32_t timestamp{}, entry_rva{};
 };
 
 // Only reads the selected loaded PE64 image. Malformed/inaccessible/changing

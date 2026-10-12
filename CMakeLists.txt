@@ -33,7 +33,7 @@ function(point_zero_warnings target)
 endfunction()
 point_zero_warnings(point_zero_ratings)
 
-add_library(point_zero_native_memory STATIC src/native/memory.cpp src/native/image.cpp)
+add_library(point_zero_native_memory STATIC src/native/memory.cpp src/native/image.cpp src/native/game_build.cpp)
 target_include_directories(point_zero_native_memory PUBLIC src)
 target_compile_definitions(point_zero_native_memory PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 point_zero_warnings(point_zero_native_memory)

@@ -6,6 +6,7 @@
 #include "catalog_contract.hpp"
 #include "catalog_hook.hpp"
 #include "boot_text.hpp"
+#include "game_build.hpp"
 
 #include <windows.h>
 #include <algorithm>
@@ -26,9 +27,8 @@ ImageRange range(const std::optional<ImageInfo>& image) noexcept {
 class GameDriver final : public NativeDriver {
 public:
     GameDriver(const NativeSetup& setup, FeatureState& state) : setup_(setup), state_(state) {
-        require(std::strcmp(setup.host.avs.model, "LDJ") == 0 &&
-                std::strcmp(setup.host.avs.datecode, "2026081900") == 0,
-                "unsupported game/datecode; POINT ZERO requires LDJ2026081900");
+        require(std::strcmp(setup.host.avs.model, "LDJ") == 0,
+                "unsupported game; POINT ZERO requires IIDX (LDJ)");
         // The bootstrap supplies its own directory, independently of the game's
         // working directory. New installs live in modules; existing root installs
         // keep their paths when receiving an ordinary generation update.
@@ -42,6 +42,11 @@ public:
         // Pin already-loaded modules once. No polling, rating source read, or DLL
         // load is introduced here. Module hashes are not blanket vetoes.
         modules_.game = hold(L"bm2dx.dll");
+        const auto tested_datecode = check_game_build(memory_, modules_.game);
+        const auto identity_note = std::string("tested_game_build=LDJ") + std::string(tested_datecode) +
+            " reported_datecode=" + setup.host.avs.datecode;
+        setup.host.log(setup.host.context, PZ_LOG_INFO,
+            {reinterpret_cast<const std::uint8_t*>(identity_note.data()), identity_note.size()});
         modules_.avs = hold(L"avs2-core.dll");
         modules_.afp = hold(L"afp-core.dll");
         modules_.utils = hold(L"afp-utils.dll");
