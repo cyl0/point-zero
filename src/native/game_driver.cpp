@@ -15,6 +15,10 @@
 #include <stdexcept>
 #include <utility>
 
+#ifndef POINT_ZERO_NATIVE_DATECODE
+#define POINT_ZERO_NATIVE_DATECODE "2026081900"
+#endif
+
 namespace point_zero::core {
 namespace {
 using namespace native;
@@ -43,6 +47,7 @@ public:
         // load is introduced here. Module hashes are not blanket vetoes.
         modules_.game = hold(L"bm2dx.dll");
         const auto tested_datecode = check_game_build(memory_, modules_.game);
+        require(tested_datecode == POINT_ZERO_NATIVE_DATECODE, "native bindings do not match the selected game build");
         const auto identity_note = std::string("tested_game_build=LDJ") + std::string(tested_datecode) +
             " reported_datecode=" + setup.host.avs.datecode;
         setup.host.log(setup.host.context, PZ_LOG_INFO,

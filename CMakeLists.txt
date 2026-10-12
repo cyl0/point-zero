@@ -191,6 +191,7 @@ target_include_directories(point_zero_core SYSTEM PRIVATE "${POINT_ZERO_RAPIDJSO
 target_link_libraries(point_zero_core PRIVATE point_zero_native_driver point_zero_native_adapters)
 target_compile_definitions(point_zero_core PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 point_zero_warnings(point_zero_core)
+include(cmake/SeptemberBindings.cmake)
 
 add_library(point_zero_inputs STATIC src/loader/input_snapshot.cpp)
 target_include_directories(point_zero_inputs PUBLIC include src)

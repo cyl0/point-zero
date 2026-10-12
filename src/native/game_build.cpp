@@ -35,6 +35,10 @@ constexpr GameBuildIdentity tested_2026081900{
     0x6a713632, 0x0bb95000, 0x00b1cccc,
     {0xe7, 0xd4, 0x62, 0x31, 0xe0, 0x2f, 0x64, 0x4c,
      0xb3, 0xdf, 0x93, 0x60, 0x4f, 0x09, 0x51, 0x54}, 1};
+constexpr GameBuildIdentity tested_2026090900{
+    0x6a8bafd1, 0x0bb93000, 0x00b1ba0c,
+    {0x7e, 0xf4, 0xba, 0xff, 0x61, 0x97, 0x2e, 0x47,
+     0x8e, 0x2d, 0x10, 0x63, 0xc7, 0x94, 0x4f, 0xf3}, 1};
 } // namespace
 
 GameBuildIdentity inspect_game_build(MemoryView memory, const ImageInfo& image) {
@@ -82,11 +86,13 @@ GameBuildIdentity inspect_game_build(MemoryView memory, const ImageInfo& image) 
 }
 
 std::string_view supported_game_datecode(const GameBuildIdentity& identity) noexcept {
-    return identity == tested_2026081900 ? "2026081900" : std::string_view{};
+    if (identity == tested_2026081900) return "2026081900";
+    if (identity == tested_2026090900) return "2026090900";
+    return {};
 }
 std::string_view check_game_build(MemoryView memory, const ImageInfo& image) {
     const auto datecode = supported_game_datecode(inspect_game_build(memory, image));
-    require(!datecode.empty(), "unsupported bm2dx build; POINT ZERO supports tested LDJ2026081900 only");
+    require(!datecode.empty(), "unsupported bm2dx build; POINT ZERO supports tested LDJ2026081900 and LDJ2026090900 only");
     return datecode;
 }
 } // namespace point_zero::native
