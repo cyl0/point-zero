@@ -33,6 +33,14 @@ std::filesystem::path module_path() {
     path.resize(count);
     return std::filesystem::path(path);
 }
+SPICE_SDK_V0 sdk_callbacks(const SPICE_SDK_V0& source) noexcept {
+    SPICE_SDK_V0 result{};
+    result.size = source.size;
+    result.log = source.log;
+    result.get_avs_info = source.get_avs_info;
+    result.add_toast = source.add_toast;
+    return result;
+}
 struct State {
     SPICE_SDK_V0 sdk{};
     std::mutex notice_mutex;
@@ -42,7 +50,7 @@ struct State {
     std::uint32_t game_major{};
     Startup startup;
     State(const UpdaterRequest& request, UpdaterReply& reply, ReleaseSettings settings)
-        : sdk(*request.sdk), runtime(request.runtime), startup(StartupOptions{request.runtime,
+        : sdk(sdk_callbacks(*request.sdk)), runtime(request.runtime), startup(StartupOptions{request.runtime,
             [this, runtime = std::filesystem::path(request.runtime), settings,
              skip = request.skip_update, offer = std::string(request.offer)]
             (const Release& installed, Channel channel, const Stop& stop) {

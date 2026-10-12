@@ -28,7 +28,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ======================================================================
-RapidJSON 1.1.0 (including internal/dtoa.h and internal/diyfp.h)
+RapidJSON 24b5e7a8 (including internal/dtoa.h and internal/diyfp.h)
 ======================================================================
 
 // Tencent is pleased to support the open source community by making RapidJSON available.
@@ -107,7 +107,7 @@ the recorded build uses the compiler's standard integer headers instead.
 // All Tencent Modifications are Copyright (C) 2015 THL A29 Limited.
 
 ======================================================================
-SafetyHook 0.7.0 (upstream tag v0.7.0)
+SafetyHook f44cc070 (upstream revision)
 ======================================================================
 
 Boost Software License - Version 1.0 - August 17th, 2003

@@ -11,6 +11,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/experimental:deterministic>
+    $<$<COMPILE_LANGUAGE:C,CXX>:/Brepro>
+    "$<$<COMPILE_LANGUAGE:C,CXX>:/pathmap:${CMAKE_BINARY_DIR}=build>"
+    "$<$<COMPILE_LANGUAGE:C,CXX>:/pathmap:${CMAKE_SOURCE_DIR}=.>")
+add_link_options(/Brepro /INCREMENTAL:NO)
+set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} /Brepro")
 include(cmake/Dependencies.cmake)
 set(POINT_ZERO_RAPIDJSON_INCLUDE_DIR "${rapidjson_SOURCE_DIR}/include")
 set(POINT_ZERO_NOTICES_RESOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/notices.rc")
