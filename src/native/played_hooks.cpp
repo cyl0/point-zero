@@ -104,7 +104,7 @@ struct PlayedHooks::State {
             const auto before = capture_body(selected, selected_stepup, i);
             std::copy(before.begin(), before.end(), instruction.expected.begin());
             captures[i] = std::make_unique<detail::PlayedMidPatch>(view, instruction.address,
-                std::span(instruction.expected).first(instruction.size), entries[i]);
+                std::span(instruction.expected).first(instruction.size), entries[i], *selected.bindings);
         }
         require(before_intact(), "disabled played hooks changed during construction");
     }

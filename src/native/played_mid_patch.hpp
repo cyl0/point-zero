@@ -24,7 +24,7 @@ namespace point_zero::native::detail {
 class PlayedMidPatch final {
 public:
     PlayedMidPatch(MemoryView, std::uintptr_t target, std::span<const std::byte> before,
-                   safetyhook::MidHookFn);
+                   safetyhook::MidHookFn, const GameBindings& = august_bindings);
     PlayedMidPatch(const PlayedMidPatch&) = delete;
     PlayedMidPatch& operator=(const PlayedMidPatch&) = delete;
     bool before_intact() const noexcept;

@@ -634,7 +634,14 @@ struct Pin { std::uint32_t rva, size; };
     std::uint32_t bitmap_import = 0xC91BD8;
 };
 }
+struct CaptureBindings {
+    std::array<std::byte, 8> confirmation{std::byte{0x48},std::byte{0x8b},std::byte{0x94},std::byte{0xd3},
+        std::byte{0xf0},std::byte{0xdf},std::byte{0x05},std::byte{0x01}};
+    std::array<std::byte, 8> stepup{std::byte{0x4f},std::byte{0x8b},std::byte{0x84},std::byte{0xc7},
+        std::byte{0xc0},std::byte{0xe2},std::byte{0x05},std::byte{0x01}};
+};
 struct GameBindings {
+    CaptureBindings captures;
     build_bindings::AssetContract asset_contract;
     build_bindings::AvsRead avs_read;
     build_bindings::BootText boot_text;

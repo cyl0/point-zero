@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "played_mid_patch.hpp"
 #include "ratings/ratings.hpp"
 
@@ -15,16 +16,8 @@ static_assert(sizeof(std::uintptr_t) == 8 && std::endian::native == std::endian:
 static_assert(offsetof(safetyhook::Context, rsp) == 384 &&
               offsetof(safetyhook::Context, trampoline_rsp) == 392 &&
               offsetof(safetyhook::Context, rip) == 400 && sizeof(safetyhook::Context) == 408);
-constexpr std::array confirmation{std::byte{0x48}, std::byte{0x8b}, std::byte{0x94}, std::byte{0xd3},
-                                  std::byte{0xf0}, std::byte{0xdf}, std::byte{0x05}, std::byte{0x01}};
-constexpr std::array confirmation_september{std::byte{0x48}, std::byte{0x8b}, std::byte{0x94}, std::byte{0xd3},
-    std::byte{0xf0}, std::byte{0xbf}, std::byte{0x05}, std::byte{0x01}};
-constexpr std::array stepup_september{std::byte{0x4f}, std::byte{0x8b}, std::byte{0x84}, std::byte{0xc7},
-    std::byte{0xc0}, std::byte{0xc2}, std::byte{0x05}, std::byte{0x01}};
 constexpr std::array hud{std::byte{0x48}, std::byte{0x63}, std::byte{0xd0},
                          std::byte{0x49}, std::byte{0x8b}, std::byte{0xcc}};
-constexpr std::array stepup{std::byte{0x4f}, std::byte{0x8b}, std::byte{0x84}, std::byte{0xc7},
-                            std::byte{0xc0}, std::byte{0xe2}, std::byte{0x05}, std::byte{0x01}};
 constexpr std::array result{std::byte{0x48}, std::byte{0x63}, std::byte{0xd8}, std::byte{0xe8}};
 constexpr std::array summary{std::byte{0x4c}, std::byte{0x89}, std::byte{0x74}, std::byte{0x24}, std::byte{0x38}};
 constexpr std::array category_back{std::byte{0x41}, std::byte{0x80}, std::byte{0x7f}, std::byte{0x08}, std::byte{0}};
@@ -49,9 +42,9 @@ template<class T> void put(std::span<std::byte> bytes, std::size_t at, T value) 
 bool starts_with(std::span<const std::byte> bytes, std::span<const std::byte> prefix) noexcept {
     return bytes.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), bytes.begin());
 }
-std::size_t stolen_size(std::span<const std::byte> bytes) {
-    if (starts_with(bytes, confirmation) || starts_with(bytes, confirmation_september)) return 8;
-    if (starts_with(bytes, stepup) || starts_with(bytes, stepup_september)) return 8;
+std::size_t stolen_size(std::span<const std::byte> bytes, const GameBindings& bindings) {
+    if (starts_with(bytes, bindings.captures.confirmation)) return 8;
+    if (starts_with(bytes, bindings.captures.stepup)) return 8;
     if (starts_with(bytes, hud)) return 6;
     if (starts_with(bytes, summary)) return 5;
     if (starts_with(bytes, category_back)) return 5;
@@ -110,9 +103,9 @@ std::uintptr_t destination(std::uintptr_t after, std::int32_t delta) {
 } // namespace
 
 PlayedMidPatch::PlayedMidPatch(MemoryView memory, std::uintptr_t target,
-                             std::span<const std::byte> before, safetyhook::MidHookFn callback)
+                             std::span<const std::byte> before, safetyhook::MidHookFn callback, const GameBindings& bindings)
     : memory_(memory), target_(target), callback_(reinterpret_cast<std::uintptr_t>(callback)),
-      before_(before.begin(), before.end()), stolen_(stolen_size(before_)) {
+      before_(before.begin(), before.end()), stolen_(stolen_size(before_, bindings)) {
     require(callback_ >= 0x10000 && target_ <= INT64_MAX &&
             before_.size() <= static_cast<std::uintptr_t>(INT64_MAX) - target_ &&
             code_is(memory_, target_, before_) &&

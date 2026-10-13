@@ -68,11 +68,11 @@ std::array<std::byte, 8> database_header(std::uintptr_t base,
     }
     using Open = std::int32_t (*)(const char*, std::uint16_t, int);
     using Read = std::size_t (*)(std::int32_t, void*, std::size_t);
-    using Close = std::int32_t (*)(std::int32_t);
+    using Close = void (*)(std::int32_t);
     const auto open = reinterpret_cast<Open>(targets[0]);
     const auto read_file = reinterpret_cast<Read>(targets[1]);
     const auto close = reinterpret_cast<Close>(targets[2]);
-    const auto file = open(path.c_str(), 0, 0);
+    const auto file = open(path.c_str(), 1, 0x1A4);
     if (file < 0) throw std::runtime_error("database AVS open failed: " + path + " result=" + std::to_string(file));
     struct Handle {
         std::int32_t value;

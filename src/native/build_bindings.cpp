@@ -507,6 +507,8 @@ const GameBindings september_bindings = [] {
     result.surface_contract.cup = {0x5fef10, 1467};
     result.surface_contract.bitmap_import = 0xc8fbd8;
     result.catalog_contract.read_call = {std::byte{0xff},std::byte{0x15},std::byte{0xbb},std::byte{0xe3},std::byte{0x33},std::byte{0}};
+    result.captures.confirmation[5] = std::byte{0xbf};
+    result.captures.stepup[5] = std::byte{0xc2};
     return result;
 }();
 }

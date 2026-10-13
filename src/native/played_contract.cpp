@@ -67,6 +67,7 @@ PlayedSites admit_played_sites(MemoryView memory, const ImageInfo& game) {
     PlayedSites result{code(memory, game.range, game_bindings(game.range).played_contract.pins[0]), code(memory, game.range, game_bindings(game.range).played_contract.pins[1]),
                        code(memory, game.range, game_bindings(game.range).played_contract.pins[2]), code(memory, game.range, game_bindings(game.range).played_contract.pins[3]),
                        code(memory, game.range, game_bindings(game.range).played_contract.pins[4])};
+    result.bindings = game.range.bindings;
     result.notes_update = code(memory, game.range, game_bindings(game.range).played_contract.pins[5]);
     const auto base = game.range.base;
     result.captures = {base + game_bindings(game.range).played_contract.confirmation_first_rva, base + game_bindings(game.range).played_contract.confirmation_second_rva, base + game_bindings(game.range).played_contract.hud_capture_rva, base + game_bindings(game.range).played_contract.result_capture_rva};

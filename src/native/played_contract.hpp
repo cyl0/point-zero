@@ -22,6 +22,7 @@ struct PlayedSites {
     std::array<std::uintptr_t, 4> named_returns{};
     PlayedFunction notes_update;
     std::uintptr_t notes_capture{};
+    const GameBindings* bindings = &august_bindings;
     std::array<std::uintptr_t, 2> result_returns{}; // Outer result -> shared layer helper.
 };
 
