@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_lifecycle_contract.hpp"
 
 #include <algorithm>
@@ -11,7 +12,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t begin, end; };
+using Pin = build_bindings::CategoryLifecycleContract::Pin;
+
 // Retained final 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll SHA256:
 // c61b6dcb8894062e56d60da8ca90053b27f129e1a8e8da5e54457aa42602397d.
 // Complete half-open .pdata extents, including populate/group error tails.
@@ -36,50 +38,11 @@ struct Pin { std::uint32_t begin, end; };
 // Style apply607D80..607D8E is a complete14B leaf tail wrapper, no .pdata/DIR64.
 // Its CALL8EC7BC (E8 BF B5 D1 FF), return8EC7C1, and restore CALL8EC7EA
 // (E8 41 B7 D1 FF), return8EC7EF, are inside the existing scene_refresh pin.
-constexpr std::array<Pin, 13> pins{{
-    {0x86FFF0, 0x87009F},
-    {0x638A70, 0x638B7D},
-    {0x639A30, 0x639ABF},
-    {0x611B80, 0x611C0B},
-    {0x603EE0, 0x604109},
-    {0x687E20, 0x687F53},
-    {0x8EA7E0, 0x8EA9E2},
-    {0x8EB050, 0x8EB81B},
-    {0x8EC1F0, 0x8EC44A},
-    {0x8EC750, 0x8EC804},
-    {0x800C70, 0x800CBF},
-    {0x607F30, 0x607FF7},
-    {0x607D80, 0x607D8E},
-}};
+
 // Complete supporting bodies, no DIR64. Only608850/A7A160 have chained descendants,
 // all included below. First five UW:
 // F1D938/FB6918/FDA6F8/FF7F84/FDA900. Callees/handler metadata remain external.
-constexpr std::array<Pin, 24> support_pins{{
-    {0x607130, 0x6076B3},
-    {0x86E310, 0x86E7FB},
-    {0x8EB820, 0x8EBEAF},
-    {0x971160, 0x97121E},
-    {0x8EE190, 0x8EE21C},
-    {0x949570, 0x949587},
-    {0x8854A0, 0x8854A8},
-    {0x897BB0, 0x897BC4},
-    {0x9493A0, 0x9493A7},
-    {0x608850, 0x608DCB},
-    {0x800E70, 0x800ECA},
-    {0x800F00, 0x800F62},
-    {0xA7A160, 0xA7A2E7},
-    {0x806F60, 0x806FB1},
-    {0x806E60, 0x806E8C},
-    {0x806E90, 0x806EBC},
-    {0x806EC0, 0x806EEC},
-    {0x806F40, 0x806F52},
-    {0x9493E0, 0x9493FE},
-    {0x605520, 0x6056C4},
-    {0x86EC40, 0x86ECF8},
-    {0x86F230, 0x86F245},
-    {0x7FB4B0, 0x7FB4B8},
-    {0x7FB460, 0x7FB471},
-}};
+
 // Entrance: two complete leaves, no unwind records or DIR64. Getter returns
 // inline game+A7E90A8 (not a pointer slot); reset clears seven DWORDs through+18.
 // No callees, selection/style writes or preview work. Checked at preparation,
@@ -256,7 +219,7 @@ struct Observation {
 CategoryLifeSite forwarded(MemoryView memory, const ImageInfo& game,
                            const std::optional<ImageInfo>& pl, unsigned route, Forwarding& observation) {
     // Finite route index: populate0, initialize1, supporting close2.
-    constexpr std::array native_pins{pins[1], pins[4], support_pins[20]};
+    const std::array native_pins{game_bindings(game.range).category_lifecycle_contract.pins[1], game_bindings(game.range).category_lifecycle_contract.pins[4], game_bindings(game.range).category_lifecycle_contract.support_pins[20]};
     constexpr std::array callbacks{pl_populate, pl_initialize, pl_close};
     constexpr std::array bindings{0xFDEA0U, 0xFE690U, 0xFE480U};
     const std::array<std::span<const unsigned char>, 3> prefixes{
@@ -323,18 +286,18 @@ CategoryLifeSite forwarded(MemoryView memory, const ImageInfo& game,
 }
 Observation observe(MemoryView memory, const ImageInfo& game, const std::optional<ImageInfo>& pl) {
     Observation result{};
-    for (std::size_t i = 0; i < pins.size(); ++i) {
+    for (std::size_t i = 0; i < build_bindings::CategoryLifecycleContract{}.pins.size(); ++i) {
         if (i == 1 || i == 4)
             result.sites.entries[i] = forwarded(memory, game, pl, i == 4 ? 1U : 0U, result.forwarding[i == 4 ? 1 : 0]);
         else {
-            const auto pin = pins[i];
+            const auto pin = game_bindings(game.range).category_lifecycle_contract.pins[i];
             auto body = copy_image(memory, game.range, pin.begin, pin.end - pin.begin, RangeUse::image_code);
             result.sites.entries[i] = {address(game.range, pin.begin, body.size()), std::move(body)};
         }
     }
-    for (std::size_t i = 0; i < support_pins.size(); ++i) {
-        const auto pin = support_pins[i];
-        if (pin.begin == 0x86EC40) {
+    for (std::size_t i = 0; i < game_bindings(game.range).category_lifecycle_contract.support_pins.size(); ++i) {
+        const auto pin = game_bindings(game.range).category_lifecycle_contract.support_pins[i];
+        if (pin.begin == game_bindings(game.range).category_lifecycle_contract.category_lookup_rva) {
             // Observe the real incoming PL close chain; never require stock
             // bytes at the patched entry or bypass its post-native reset.
             (void)forwarded(memory, game, pl, 2, result.forwarding[2]);
@@ -346,30 +309,30 @@ Observation observe(MemoryView memory, const ImageInfo& game, const std::optiona
     }
     // The retained getters' complete RIP-relative data operands must fit the
     // claimed image. Bounds only: no mutable-data copy or permission query.
-    (void)address(game.range, 0xAAB3AA8, 8);
-    (void)address(game.range, 0xACD79A4, 4);
-    (void)address(game.range, 0xACD79B0, 8); // Two guarded DWORD active-side flags.
-    (void)address(game.range, 0xA7E96D8, 8);
-    (void)address(game.range, 0xA7E9758, 8);
-    (void)address(game.range, 0xA7E9750, 8);
-    (void)address(game.range, 0xB28CAD8, 8);
-    (void)address(game.range, 0xB29A250, 8);
-    result.sites.initialize_caller = address(game.range, 0x60717B, 1);
-    constexpr std::array slots{0xD847F0U, 0xD84800U}, targets{0x8EB820U, 0x8EC1F0U};
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.category_state_rva, 8);
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.dp_flag_rva, 4);
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.active_flags_rva, 8); // Two guarded DWORD active-side flags.
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.controller_slot_1_rva, 8);
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.controller_slot_2_rva, 8);
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.controller_slot_3_rva, 8);
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.scene_slot_1_rva, 8);
+    (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.scene_slot_2_rva, 8);
+    result.sites.initialize_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_initialize_caller_rva, 1);
+    const std::array slots{game_bindings(game.range).category_lifecycle_contract.scene_entry_slot_rva, game_bindings(game.range).category_lifecycle_contract.scene_refresh_slot_rva}, targets{game_bindings(game.range).category_lifecycle_contract.scene_entry_rva, game_bindings(game.range).category_lifecycle_contract.scene_refresh_rva};
     for (std::size_t i = 0; i < slots.size(); ++i) {
         const auto binding = copy_image(memory, game.range, slots[i], 8, RangeUse::image_read);
         require(value<std::uintptr_t>(binding, 0) == address(game.range, targets[i], 1),
                 "category lifecycle ordinary scene vtable changed");
     }
-    result.sites.scene_entry_caller = address(game.range, 0x8EB930, 1);
-    result.sites.scene_tick_caller = address(game.range, 0x97120B, 1);
-    result.sites.scene_refresh_caller = address(game.range, 0x8EC3D1, 1);
-    result.sites.preview_caller = address(game.range, 0x608A7A, 1);
-    result.sites.restore_caller = address(game.range, 0x8EB6F0, 1);
-    result.sites.style_apply_caller = address(game.range, 0x8EC7C1, 1);
-    result.sites.style_restore_caller = address(game.range, 0x8EC7EF, 1);
-    result.sites.scene_vtable = address(game.range, 0xD84788, 0x80);
-    result.sites.idle_callback = address(game.range, 0x8EE190, 1);
+    result.sites.scene_entry_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_scene_entry_caller_rva, 1);
+    result.sites.scene_tick_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_scene_tick_caller_rva, 1);
+    result.sites.scene_refresh_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_scene_refresh_caller_rva, 1);
+    result.sites.preview_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_preview_caller_rva, 1);
+    result.sites.restore_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_restore_caller_rva, 1);
+    result.sites.style_apply_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_style_apply_caller_rva, 1);
+    result.sites.style_restore_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_style_restore_caller_rva, 1);
+    result.sites.scene_vtable = address(game.range, game_bindings(game.range).category_lifecycle_contract.scene_vtable_rva, 0x80);
+    result.sites.idle_callback = address(game.range, game_bindings(game.range).category_lifecycle_contract.idle_callback_rva, 1);
     return result;
 }
 } // namespace
@@ -390,7 +353,7 @@ CategoryLifeSites admit_category_lifecycle_contract(
                   static_cast<unsigned>(CategoryLifeEvent::preview_assign) == 10 &&
                   static_cast<unsigned>(CategoryLifeEvent::selection_restore) == 11 &&
                   static_cast<unsigned>(CategoryLifeEvent::style_apply) == 12);
-    static_assert(std::tuple_size_v<decltype(CategoryLifeSites::entries)> == pins.size());
+    static_assert(std::tuple_size_v<decltype(CategoryLifeSites::entries)> == build_bindings::CategoryLifecycleContract{}.pins.size());
     auto observed = observe(memory, game, playlister);
     return std::move(observed.sites);
 }

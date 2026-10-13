@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "cup.hpp"
 
 #include <windows.h>
@@ -11,7 +12,7 @@ namespace point_zero::native {
 namespace {
 constexpr char letters[] = "bnhal";
 constexpr const char* children[] = {"whole", "fraction", "point"};
-constexpr auto layer_vtable = 0xDC86E0;
+
 
 int animated(int target, int counter, int duration) noexcept {
     const float progress = float(std::clamp(counter, 0, duration)) / float(duration);
@@ -107,7 +108,7 @@ void CupRenderer::begin_impl(std::uintptr_t owner) {
     if (!prepared_ || !live_package()) { fault(); return; }
     std::uintptr_t clock{};
     int mode{}, rate{};
-    if (!read_field(memory_, owner, 0x34, current_.counter) || !read_field(memory_, game_.base, 0xABAF550, clock) ||
+    if (!read_field(memory_, owner, 0x34, current_.counter) || !read_field(memory_, game_.base, game_bindings(game_).cup.animation_clock_rva, clock) ||
         !read_field(memory_, clock, 0x260, mode) || !read_field(memory_, clock, 0x270, rate)) return;
     if (mode == 2) rate = 60;
     if (rate < 1) return;
@@ -219,7 +220,7 @@ bool CupRenderer::bitmap_impl(int mc, const char* name, int mode, int& result, S
     std::uintptr_t layer{}, vt{};
     std::uint32_t stream{};
     if (!read_field(memory_, current_.owner, 8ULL * difficulty, layer) || !read_field(memory_, layer, 0, vt) ||
-        vt != game_.base + layer_vtable || !read_field(memory_, layer, 8, stream) || afp_.valid(5, stream) < 0) return forward();
+        vt != game_.base + game_bindings(game_).cup.layer_vtable || !read_field(memory_, layer, 8, stream) || afp_.valid(5, stream) < 0) return forward();
     char leaf[]{'d','i','f','f','_',letters[difficulty],0};
     bool found{};
     int handle = afp_.path(stream, leaf);

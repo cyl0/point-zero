@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_roots.hpp"
 
 #include <windows.h>
@@ -56,7 +57,7 @@ int select(std::span<const Entry> values, int wanted, bool custom) noexcept {
 bool find_level_group(MemoryView memory, ImageRange game, std::uintptr_t list,
                       std::uintptr_t& group, std::uintptr_t expected) noexcept {
     std::uintptr_t head{}, node{}, vtable{};
-    if (!pointer(list, 0x88) || !read(memory, list, vtable) || vtable != game.base + 0xD53278 ||
+    if (!pointer(list, 0x88) || !read(memory, list, vtable) || vtable != game.base + game_bindings(game).category_roots.list_vtable_rva ||
         !read(memory, list + 16, head) || !pointer(head, 8) || !read(memory, head, node)) return false;
     group = 0;
     for (unsigned n = 0; node != head; ++n) {
@@ -66,7 +67,7 @@ bool find_level_group(MemoryView memory, ImageRange game, std::uintptr_t list,
             !read(memory, node + 16, id) || !read(memory, node + 24, value)) return false;
         if (id == 1) {
             if (group || (expected && value != expected) || !pointer(value, 0xB0) ||
-                !read(memory, value, vtable) || vtable != game.base + 0xCB6B10 ||
+                !read(memory, value, vtable) || vtable != game.base + game_bindings(game).category_roots.level_group_vtable_rva ||
                 !read(memory, value + 8, id) || id != 1) return false;
             group = value;
         } else if (expected && value == expected) return false;
@@ -138,7 +139,7 @@ struct CategoryRoots::Backing {
     }
     bool current() const noexcept {
         std::uintptr_t m{}, l{}, found{};
-        return read(memory, game.base + 0xAAB3B08, m) && m == manager &&
+        return read(memory, game.base + game_bindings(game).category_roots.category_manager_rva, m) && m == manager &&
             read(memory, manager + 0x175D0, l) && l == list &&
             find_level_group(memory, game, list, found, group);
     }
@@ -271,7 +272,7 @@ struct CategoryRoots::Backing {
 
 CategoryRoots::CategoryRoots(MemoryView memory, ImageRange game, CategoryVectorCalls calls, Lookup lookup) {
     if (!memory.read || !memory.query || !calls.grow || !calls.destroy || !lookup ||
-        !pointer(game.base, game.size) || game.size < 0xAAB3B10)
+        !pointer(game.base, game.size) || game.size < game_bindings(game).category_roots.category_storage_rva)
         throw std::invalid_argument("incomplete native LEVEL root dependencies");
     backing_ = std::make_unique<Backing>(memory, game, calls, lookup);
 }

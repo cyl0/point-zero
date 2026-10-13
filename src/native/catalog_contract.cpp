@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "catalog_contract.hpp"
 #include "ratings/ratings.hpp"
 
@@ -11,28 +12,16 @@
 
 namespace point_zero::native {
 namespace {
+using Pin = build_bindings::CatalogContract::Pin;
 static_assert(sizeof(std::uintptr_t) == 8 && std::endian::native == std::endian::little);
 constexpr std::uintptr_t user_max = 0x00007fffffffffffULL;
-constexpr std::uintptr_t header_rva = 0xacd8900, index_rva = 0xacd8910;
-constexpr std::uintptr_t read_rva = 0x952c87, import_rva = 0xc91d88, return_rva = 0x952c8d;
+
+
 constexpr std::size_t stock_capacity = 0x400000, omni_capacity = 0x600000;
-struct Pin { std::uintptr_t rva; std::size_t size; };
+
 // Complete retained LDJ2026081900 extents for bounds/permission admission.
 // Function bodies are not copied or treated as runtime identity fingerprints.
-constexpr std::array pins{
-    Pin{0x951e10,47},
-    Pin{0x951e40,61},
-    Pin{0x951e80,59},
-    Pin{0x951fd0,8},
-    Pin{0x9522b0,34},
-    Pin{0x82dfa0,133},
-    Pin{0x3507e0,193},
-    Pin{0x33e910,425},
-    Pin{0x93ccb0,419},
-    Pin{0x940660,684},
-    Pin{0x952c20,214},
-    Pin{0x952db0,31}
-};
+
 void require(bool okay, const char* reason) {
     if (!okay) throw std::runtime_error(reason);
 }
@@ -120,7 +109,7 @@ void check_chain(CatalogMemory& seen, ImageRange game, ImageRange omni,
     require(detour.size() == 6 && detour[0] == std::byte{0xe9} && detour[5] == std::byte{0x90},
             "catalogue Omni detour shape mismatch");
     CatalogOmniChain chain;
-    chain.relay = relative(add(game.base, read_rva + 5), field<std::int32_t>(detour, 1));
+    chain.relay = relative(add(game.base, game_bindings(game).catalog_contract.read_rva + 5), field<std::int32_t>(detour, 1));
     const auto relay = seen.copy(chain.relay, 14, RangeUse::private_code);
     constexpr std::array indirect{std::byte{0xff},std::byte{0x25},std::byte{0},
                                   std::byte{0},std::byte{0},std::byte{0}};
@@ -136,19 +125,19 @@ void check_chain(CatalogMemory& seen, ImageRange game, ImageRange omni,
     const auto trampoline = seen.copy(chain.trampoline, 11, RangeUse::private_code);
     require(trampoline[0] == std::byte{0xff} && trampoline[1] == std::byte{0x15} &&
             trampoline[6] == std::byte{0xe9}, "catalogue Omni trampoline shape mismatch");
-    require(relative(add(chain.trampoline, 6), field<std::int32_t>(trampoline, 2)) == add(game.base, import_rva) &&
-            relative(add(chain.trampoline, 11), field<std::int32_t>(trampoline, 7)) == add(game.base, return_rva),
+    require(relative(add(chain.trampoline, 6), field<std::int32_t>(trampoline, 2)) == add(game.base, game_bindings(game).catalog_contract.import_rva) &&
+            relative(add(chain.trampoline, 11), field<std::int32_t>(trampoline, 7)) == add(game.base, game_bindings(game).catalog_contract.return_rva),
             "catalogue Omni relocated read target/continuation mismatch");
 }
 void check_replacements(CatalogMemory& seen, ImageRange game) {
     // Retain the recognized Omni accessor/load changes without constructing a
     // normalized copy whose bytes have no consumer.
-    for (const auto rva : {0x951e28U, 0x951e65U, 0x951e98U, 0x951fd1U}) {
+    for (const auto rva : {game_bindings(game).catalog_contract.omni_header_patch_1_rva, game_bindings(game).catalog_contract.omni_header_patch_2_rva, game_bindings(game).catalog_contract.omni_header_patch_3_rva, game_bindings(game).catalog_contract.omni_index_patch_rva}) {
         const auto opcode = seen.copy(add(game.base, rva), 1, RangeUse::image_code, game);
         require(opcode[0] == std::byte{0x8b}, "catalogue Omni accessor replacement mismatch");
     }
-    const auto capacity = seen.copy(add(game.base, 0x952c6b), 4, RangeUse::image_code, game);
-    const auto branch = seen.copy(add(game.base, 0x952cc4), 2, RangeUse::image_code, game);
+    const auto capacity = seen.copy(add(game.base, game_bindings(game).catalog_contract.capacity_immediate_rva), 4, RangeUse::image_code, game);
+    const auto branch = seen.copy(add(game.base, game_bindings(game).catalog_contract.capacity_branch_rva), 2, RangeUse::image_code, game);
     require(field<std::uint32_t>(capacity, 0) == omni_capacity &&
             branch[0] == std::byte{0x90} && branch[1] == std::byte{0x90},
             "catalogue Omni capacity/branch replacement mismatch");
@@ -165,32 +154,31 @@ CatalogContract check_catalog_contract(MemoryView memory, ImageRange game, Image
     }
     CatalogMemory seen(memory);
     CatalogContract result;
-    result.getters = {add(game.base, 0x951fd0)};
-    result.load = add(game.base, 0x952c20);
+    result.getters = {add(game.base, game_bindings(game).catalog_contract.catalog_getters_rva)};
+    result.load = add(game.base, game_bindings(game).catalog_contract.catalog_load_rva);
     // Check the slot's image ownership, never assert anything about its target.
-    seen.range(add(game.base, import_rva), sizeof(std::uintptr_t), RangeUse::image_read, game);
-    for (const auto& pin : pins)
+    seen.range(add(game.base, game_bindings(game).catalog_contract.import_rva), sizeof(std::uintptr_t), RangeUse::image_read, game);
+    for (const auto& pin : game_bindings(game).catalog_contract.pins)
         seen.range(add(game.base, pin.rva), pin.size, RangeUse::image_code, game);
-    const auto read_call = seen.copy(add(game.base, read_rva), 6, RangeUse::image_code, game);
+    const auto read_call = seen.copy(add(game.base, game_bindings(game).catalog_contract.read_rva), 6, RangeUse::image_code, game);
     // Prove the chain before accepting the remaining known live replacements.
     if (omni) {
         check_chain(seen, game, omnifix, read_call);
         check_replacements(seen, game);
     } else {
-        constexpr std::array expected{std::byte{0xff}, std::byte{0x15}, std::byte{0xfb},
-            std::byte{0xf0}, std::byte{0x33}, std::byte{0}};
+        const auto& expected = game_bindings(game).catalog_contract.read_call;
         require(std::equal(expected.begin(), expected.end(), read_call.begin()),
                 "catalogue read call requires a recognized provider route");
     }
     if (omni) {
-        const auto header = seen.pointer(add(game.base, header_rva), game);
-        const auto index = seen.pointer(add(game.base, index_rva), game);
+        const auto header = seen.pointer(add(game.base, game_bindings(game).catalog_contract.header_rva), game);
+        const auto index = seen.pointer(add(game.base, game_bindings(game).catalog_contract.index_rva), game);
         const auto buffer = seen.pointer(add(omnifix.base, 0xddaa8), omnifix);
         require(index == add(header, 16) && header == buffer, "catalogue Omni storage pointers disagree");
         seen.range(header, omni_capacity, RangeUse::private_writable, {}, true);
         result.storage = {header, omni_capacity};
     } else {
-        result.storage = {add(game.base, header_rva), stock_capacity};
+        result.storage = {add(game.base, game_bindings(game).catalog_contract.header_rva), stock_capacity};
         seen.range(result.storage.address, stock_capacity, RangeUse::image_read, game, true);
     }
     return result;

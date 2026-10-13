@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "level_population.hpp"
 
 #include <windows.h>
@@ -31,10 +32,10 @@ void LevelPopulation::prepare() {
 bool LevelPopulation::owner() const noexcept {
     std::uintptr_t manager{}, list{}, vt{};
     return pointer(game_.base) && contains(game_.base, game_.size, game_.base, game_.size) &&
-        game_.size >= 0xAAB3B08 + 8 && pointer(manager_) && pointer(list_) &&
-        read_field(memory_, game_.base, 0xAAB3B08, manager) && manager == manager_ &&
+        game_.size >= game_bindings(game_).level_population.category_manager_rva + 8 && pointer(manager_) && pointer(list_) &&
+        read_field(memory_, game_.base, game_bindings(game_).level_population.category_manager_rva, manager) && manager == manager_ &&
         read_field(memory_, manager_, 0x175D0, list) && list == list_ &&
-        read_field(memory_, list_, 0, vt) && vt == game_.base + 0xD53278;
+        read_field(memory_, list_, 0, vt) && vt == game_.base + game_bindings(game_).level_population.list_vtable_rva;
 }
 bool LevelPopulation::source(unsigned index, Source& out) const noexcept {
     const auto style = index / 12;

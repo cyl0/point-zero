@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "original_filter_state.hpp"
 
 #include <windows.h>
@@ -27,7 +28,7 @@ bool node_for(MemoryView memory, std::uintptr_t map, int key, std::uintptr_t& fo
 SavedFilterResult collect(MemoryView memory, ImageRange game, std::uintptr_t category,
                           int style, bool saved_only, OriginalFilterState& out) noexcept {
     if (style < 0 || style > 1 || !pointer(category) || !pointer(game.base) ||
-        !contains(game.base, game.size, game.base, game.size) || game.size < 0xAAB3C98 + 8)
+        !contains(game.base, game.size, game.base, game.size) || game.size < game_bindings(game).original_filter_state.saved_filter_rva + 8)
         return SavedFilterResult::invalid;
     OriginalFilterState next;
     next.category = category; next.style = style;
@@ -36,11 +37,11 @@ SavedFilterResult collect(MemoryView memory, ImageRange game, std::uintptr_t cat
     std::uint8_t has_set{};
     if (!read_field(memory, category, 0, next.id) ||
         !(next.id == 110 || (next.id >= 210 && next.id <= 214)) ||
-        !read_field(memory, game.base, 0xAAB3B08, next.manager) || !pointer(next.manager) ||
+        !read_field(memory, game.base, game_bindings(game).original_filter_state.category_manager_rva, next.manager) || !pointer(next.manager) ||
         !contains(next.manager, 16 + 2 * 230 * 208, category, 208) ||
         category != next.manager + 16 + 208 * (230ULL * style + next.id) ||
         !read_field(memory, next.manager, 0x175D0, next.list) || !pointer(next.list) ||
-        !read_field(memory, next.list, 0, vt) || vt != game.base + 0xD53278 ||
+        !read_field(memory, next.list, 0, vt) || vt != game.base + game_bindings(game).original_filter_state.list_vtable_rva ||
         !read_field(memory, category, 160, menu_id) || (!saved_only && menu_id != next.id) ||
         !read_field(memory, category, 164, menu_set) || (!saved_only && menu_set != 1) ||
         !read_field(memory, category, 168, has_set) || (!saved_only && !has_set))
@@ -53,8 +54,8 @@ SavedFilterResult collect(MemoryView memory, ImageRange game, std::uintptr_t cat
             return SavedFilterResult::none;
         if (menu_id != next.id) return SavedFilterResult::invalid;
     }
-    if (!read_field(memory, game.base, 0xAAB3C90, next.active) || !pointer(next.active) ||
-        !read_field(memory, game.base, 0xAAB3C98, next.saved) || !pointer(next.saved) ||
+    if (!read_field(memory, game.base, game_bindings(game).original_filter_state.active_filter_rva, next.active) || !pointer(next.active) ||
+        !read_field(memory, game.base, game_bindings(game).original_filter_state.saved_filter_rva, next.saved) || !pointer(next.saved) ||
         next.active > UINTPTR_MAX - 200 || next.saved > UINTPTR_MAX - 136 ||
         (!saved_only && (!node_for(memory, next.active + 8 + 64, 0, next.active_node) || !next.active_node)) ||
         !node_for(memory, next.saved + 8 + 64ULL * style, next.id, next.category_node))
@@ -69,7 +70,7 @@ SavedFilterResult collect(MemoryView memory, ImageRange game, std::uintptr_t cat
         !read_field(memory, next.saved_node, 24, next.object) || !read_field(memory, next.saved_node, 32, next.control) ||
         (!saved_only && active_object != next.object) ||
         !pointer(next.object) || !read_field(memory, next.object, 0, object_vt) ||
-        object_vt != game.base + 0xCC1490 ||
+        object_vt != game.base + game_bindings(game).original_filter_state.filter_vtable_rva ||
         !read_field(memory, next.object, 8, next.enabled) ||
         !read_field(memory, next.object, 16, next.lower) || !read_field(memory, next.object, 20, next.upper))
         return SavedFilterResult::invalid;

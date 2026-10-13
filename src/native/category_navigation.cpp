@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_navigation.hpp"
 #include "category_chart_match.hpp"
 #include "inline_patch.hpp"
@@ -94,10 +95,10 @@ struct CategoryNavigation::State {
     bool current(CategoryRootOwner expected) const noexcept {
         std::uintptr_t manager{}, list{}, vt{};
         return expected.manager >= 0x10000 && expected.list >= 0x10000 && expected.group >= 0x10000 &&
-            read(memory, game.base + 0xAAB3B08, manager) && manager == expected.manager &&
+            read(memory, game.base + game_bindings(game).category_navigation.category_manager_rva, manager) && manager == expected.manager &&
             read(memory, manager + 0x175D0, list) && list == expected.list &&
-            read(memory, list, vt) && vt == game.base + 0xD53278 &&
-            read(memory, expected.group, vt) && vt == game.base + 0xCB6B10;
+            read(memory, list, vt) && vt == game.base + game_bindings(game).category_navigation.list_vtable_rva &&
+            read(memory, expected.group, vt) && vt == game.base + game_bindings(game).category_navigation.level_group_vtable_rva;
     }
     bool enabled() const noexcept {
         return roots && feature.view().enabled() && roots->state() == CategoryRootsState::published;
@@ -292,7 +293,7 @@ CategoryNavigation::CategoryNavigation(MemoryView memory, ImageRange game, Featu
                 calls.restore_chart && calls.set_difficulty,
                 "category navigation dependencies missing");
         require(game.base >= 0x10000 && contains(game.base, game.size, game.base, game.size) &&
-                contains(game.base, game.size, game.base + 0xAAB3B08, 8), "category navigation image invalid");
+                contains(game.base, game.size, game.base + game_bindings(game).category_navigation.category_manager_rva, 8), "category navigation image invalid");
         const std::array entries{&sites.open, &sites.cycle, &sites.exact, &sites.back};
         require(sites.cycle_caller >= 0x10000 && sites.back_continuation >= 0x10000,
                 "category navigation caller/continuation invalid");

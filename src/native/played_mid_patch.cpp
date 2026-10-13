@@ -17,6 +17,10 @@ static_assert(offsetof(safetyhook::Context, rsp) == 384 &&
               offsetof(safetyhook::Context, rip) == 400 && sizeof(safetyhook::Context) == 408);
 constexpr std::array confirmation{std::byte{0x48}, std::byte{0x8b}, std::byte{0x94}, std::byte{0xd3},
                                   std::byte{0xf0}, std::byte{0xdf}, std::byte{0x05}, std::byte{0x01}};
+constexpr std::array confirmation_september{std::byte{0x48}, std::byte{0x8b}, std::byte{0x94}, std::byte{0xd3},
+    std::byte{0xf0}, std::byte{0xbf}, std::byte{0x05}, std::byte{0x01}};
+constexpr std::array stepup_september{std::byte{0x4f}, std::byte{0x8b}, std::byte{0x84}, std::byte{0xc7},
+    std::byte{0xc0}, std::byte{0xc2}, std::byte{0x05}, std::byte{0x01}};
 constexpr std::array hud{std::byte{0x48}, std::byte{0x63}, std::byte{0xd0},
                          std::byte{0x49}, std::byte{0x8b}, std::byte{0xcc}};
 constexpr std::array stepup{std::byte{0x4f}, std::byte{0x8b}, std::byte{0x84}, std::byte{0xc7},
@@ -46,8 +50,8 @@ bool starts_with(std::span<const std::byte> bytes, std::span<const std::byte> pr
     return bytes.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), bytes.begin());
 }
 std::size_t stolen_size(std::span<const std::byte> bytes) {
-    if (starts_with(bytes, confirmation)) return 8;
-    if (starts_with(bytes, stepup)) return 8;
+    if (starts_with(bytes, confirmation) || starts_with(bytes, confirmation_september)) return 8;
+    if (starts_with(bytes, stepup) || starts_with(bytes, stepup_september)) return 8;
     if (starts_with(bytes, hud)) return 6;
     if (starts_with(bytes, summary)) return 5;
     if (starts_with(bytes, category_back)) return 5;

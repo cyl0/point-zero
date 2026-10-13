@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_vector_contract.hpp"
 
 #include <array>
@@ -7,7 +8,7 @@ namespace point_zero::native {
 namespace {
 // Complete extents and call/ABI evidence remain reproducible in retained-PE
 // tests. Runtime admission checks only the two required callable entries.
-constexpr std::array<std::uint32_t, 2> entries{0x6387B0, 0x611B20};
+
 
 // Grow RCX=Vector*, RDX=old position, R8=address of one category pointer.
 // It saves the insertion index (position-begin)/8, chooses capacity from
@@ -58,10 +59,10 @@ void check_entry(MemoryView memory, ImageRange image, std::uint32_t entry) {
 
 CategoryVectorCalls admit_category_vector_contract(MemoryView memory, const ImageInfo& game) {
     static_assert(sizeof(std::uintptr_t) == 8 && sizeof(category_layout::Vector) == 24);
-    for (const auto entry : entries) check_entry(memory, game.range, entry);
+    for (const auto entry : game_bindings(game.range).category_vector_contract.entries) check_entry(memory, game.range, entry);
     return {
-        reinterpret_cast<decltype(CategoryVectorCalls::grow)>(game.range.base + 0x6387B0),
-        reinterpret_cast<decltype(CategoryVectorCalls::destroy)>(game.range.base + 0x611B20),
+        reinterpret_cast<decltype(CategoryVectorCalls::grow)>(game.range.base + game_bindings(game.range).category_vector_contract.grow_rva),
+        reinterpret_cast<decltype(CategoryVectorCalls::destroy)>(game.range.base + game_bindings(game.range).category_vector_contract.destroy_rva),
     };
 }
 } // namespace point_zero::native

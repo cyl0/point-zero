@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_navigation_contract.hpp"
 
 #include <array>
@@ -8,7 +9,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t begin, end; };
+using Pin = build_bindings::CategoryNavigationContract::Pin;
+
 // Retained 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll SHA256:
 // c61b6dcb8894062e56d60da8ca90053b27f129e1a8e8da5e54457aa42602397d.
 // First six are complete half-open .pdata extents, including input/cycle error
@@ -22,17 +24,7 @@ struct Pin { std::uint32_t begin, end; };
 // Exact adds THREE fragments ending 5FD561/5FD59D/5FD606 (UW F1AF6C/7C/90).
 // Restore is the complete 13-byte leaf, no .pdata; set-difficulty adds THREE
 // fragments ending 5FDC07/5FDC46/5FDC68 (UW F1AED4/E8/FC). No DIR64 overlap.
-constexpr std::array<Pin, 9> pins{{
-    {0x603900, 0x603A12},
-    {0x63A940, 0x63A9FC},
-    {0x604110, 0x604C66},
-    {0x594A20, 0x594AAE},
-    {0x603810, 0x6038F4},
-    {0x5C5C80, 0x5C5CBB},
-    {0x5FD520, 0x5FD606},
-    {0x5F7BE0, 0x5F7BED},
-    {0x5FDBD0, 0x5FDC68},
-}};
+
 
 // ABI/frame evidence: open/close RCX=navigation, DL=sound, preserve R14 and
 // RBX/RBP/RSI/RDI, push8+sub40h (48h stack delta); neither returns a status.
@@ -117,7 +109,7 @@ constexpr std::array<Pin, 9> pins{{
 // their callees and caller6058A0 are OFFLINE evidence only in this contract.
 // Preserve ordinary forwarding rather than add hooks at those helpers. This
 // contract neither admits request-consumer hooks nor certifies live coexistence.
-constexpr std::uint32_t cycle_slot = 0xD53280;
+
 
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
 std::uintptr_t address(ImageRange image, std::uint32_t rva, std::size_t size) {
@@ -138,12 +130,12 @@ std::vector<std::byte> copy(MemoryView memory, ImageRange image, std::uint32_t r
     return bytes;
 }
 struct Observation {
-    std::array<std::vector<std::byte>, pins.size()> bodies;
+    std::array<std::vector<std::byte>, build_bindings::CategoryNavigationContract{}.pins.size()> bodies;
 };
 Observation observe(MemoryView memory, ImageRange image) {
     Observation result;
-    for (std::size_t i = 0; i < pins.size(); ++i) {
-        const auto pin = pins[i];
+    for (std::size_t i = 0; i < game_bindings(image).category_navigation_contract.pins.size(); ++i) {
+        const auto pin = game_bindings(image).category_navigation_contract.pins[i];
         auto& bytes = result.bodies[i];
         if (i == 0 || i == 1 || i == 2 || i == 6)
             bytes = copy(memory, image, pin.begin, pin.end - pin.begin, RangeUse::image_code);
@@ -153,10 +145,10 @@ Observation observe(MemoryView memory, ImageRange image) {
                     "category navigation support ownership/protection changed");
         }
     }
-    const auto binding = copy(memory, image, cycle_slot, sizeof(std::uintptr_t), RangeUse::image_read);
+    const auto binding = copy(memory, image, game_bindings(image).category_navigation_contract.cycle_slot, sizeof(std::uintptr_t), RangeUse::image_read);
     std::uintptr_t target{};
     std::memcpy(&target, binding.data(), sizeof(target));
-    require(target == address(image, pins[1].begin, pins[1].end - pins[1].begin),
+    require(target == address(image, game_bindings(image).category_navigation_contract.pins[1].begin, game_bindings(image).category_navigation_contract.pins[1].end - game_bindings(image).category_navigation_contract.pins[1].begin),
             "category navigation list vtable cycle binding changed");
     return result;
 }
@@ -166,21 +158,21 @@ CategoryNavigationContract admit_category_navigation_contract(MemoryView memory,
     static_assert(sizeof(std::uintptr_t) == 8);
     auto observed = observe(memory, game.range);
     CategoryNavigationContract result;
-    result.sites.open = {address(game.range, pins[0].begin, observed.bodies[0].size()),
+    result.sites.open = {address(game.range, game_bindings(game.range).category_navigation_contract.pins[0].begin, observed.bodies[0].size()),
                          std::move(observed.bodies[0])};
-    result.sites.cycle = {address(game.range, pins[1].begin, observed.bodies[1].size()),
+    result.sites.cycle = {address(game.range, game_bindings(game.range).category_navigation_contract.pins[1].begin, observed.bodies[1].size()),
                           std::move(observed.bodies[1])};
-    result.sites.exact = {address(game.range, pins[6].begin, observed.bodies[6].size()),
+    result.sites.exact = {address(game.range, game_bindings(game.range).category_navigation_contract.pins[6].begin, observed.bodies[6].size()),
                           std::move(observed.bodies[6])};
-    result.sites.cycle_caller = address(game.range, 0x6042BD, 1);
-    result.sites.back = {address(game.range, 0x60451E, 5),
-        {observed.bodies[2].begin() + (0x60451E - pins[2].begin),
-         observed.bodies[2].begin() + (0x604523 - pins[2].begin)}};
-    result.sites.back_continuation = address(game.range, 0x604B9F, 1);
-    result.calls.close = reinterpret_cast<decltype(result.calls.close)>(game.range.base + pins[4].begin);
-    result.calls.sound = reinterpret_cast<decltype(result.calls.sound)>(game.range.base + pins[5].begin);
-    result.calls.restore_chart = reinterpret_cast<decltype(result.calls.restore_chart)>(game.range.base + pins[7].begin);
-    result.calls.set_difficulty = reinterpret_cast<decltype(result.calls.set_difficulty)>(game.range.base + pins[8].begin);
+    result.sites.cycle_caller = address(game.range, game_bindings(game.range).category_navigation_contract.sites_cycle_caller_rva, 1);
+    result.sites.back = {address(game.range, game_bindings(game.range).category_navigation_contract.sites_back_rva, 5),
+        {observed.bodies[2].begin() + (game_bindings(game.range).category_navigation_contract.sites_back_rva - game_bindings(game.range).category_navigation_contract.pins[2].begin),
+         observed.bodies[2].begin() + (game_bindings(game.range).category_navigation_contract.back_capture_end_rva - game_bindings(game.range).category_navigation_contract.pins[2].begin)}};
+    result.sites.back_continuation = address(game.range, game_bindings(game.range).category_navigation_contract.sites_back_continuation_rva, 1);
+    result.calls.close = reinterpret_cast<decltype(result.calls.close)>(game.range.base + game_bindings(game.range).category_navigation_contract.pins[4].begin);
+    result.calls.sound = reinterpret_cast<decltype(result.calls.sound)>(game.range.base + game_bindings(game.range).category_navigation_contract.pins[5].begin);
+    result.calls.restore_chart = reinterpret_cast<decltype(result.calls.restore_chart)>(game.range.base + game_bindings(game.range).category_navigation_contract.pins[7].begin);
+    result.calls.set_difficulty = reinterpret_cast<decltype(result.calls.set_difficulty)>(game.range.base + game_bindings(game.range).category_navigation_contract.pins[8].begin);
     return result;
 }
 } // namespace point_zero::native

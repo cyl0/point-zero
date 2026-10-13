@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "avs_read.hpp"
 
 #include <stdexcept>
@@ -22,7 +23,7 @@ bool provider(std::string_view text) {
 void check_avs_read_contract(MemoryView memory, const ImageInfo& game, const ImageInfo& avs) {
     // The game imports AVS's read ABI. Spice/IFS own its interception and saved
     // originals; this mod neither calls nor patches their private wrappers.
-    const auto imported = inspect_import(memory, game, 0xc91d88);
+    const auto imported = inspect_import(memory, game, game_bindings(game.range).avs_read.read_import_rva);
     const auto exported = inspect_export(memory, avs, 82);
     require(provider(imported.provider) && imported.ordinal == 82 && imported.name.empty() &&
             exported.forwarder.empty() &&

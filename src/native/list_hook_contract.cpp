@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "list_hook_contract.hpp"
 
 #include <algorithm>
@@ -7,7 +8,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Pin = build_bindings::ListHookContract::Pin;
+
 
 // Evidence: retained 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll,
 // read as PE data. All ranges are half-open RVAs, exclude following INT3
@@ -55,11 +57,7 @@ struct Pin { std::uint32_t rva, size; };
 // source/src/{native_resource_bindings.hpp,list_ux_native_pins.inl,
 // final_surface_pins.hpp}. list_glyph_pins.inl includes legacy offsets;
 // none were transplanted into the final-image contract.
-constexpr Pin pins[]{
-    {0x34AC50, 856},
-    {0x5F7BF0, 997},
-    {0x5F8570, 525},
-};
+
 
 void require(bool ok, const char* why) { if (!ok) throw std::runtime_error(why); }
 
@@ -89,11 +87,11 @@ ListHookSite code(MemoryView memory, ImageRange image, Pin pin) {
 } // namespace
 
 ListHookSite admit_list_hook_site(MemoryView memory, const ImageInfo& game) {
-    auto result = code(memory, game.range, pins[0]);
-    (void)address(memory, game.range, pins[1]);
-    (void)address(memory, game.range, pins[2]);
+    auto result = code(memory, game.range, game_bindings(game.range).list_hook_contract.pins[0]);
+    (void)address(memory, game.range, game_bindings(game.range).list_hook_contract.pins[1]);
+    (void)address(memory, game.range, game_bindings(game.range).list_hook_contract.pins[2]);
     const auto base = game.range.base;
-    result.callers = {base + 0x5F7E62, base + 0x5F865C, base + 0x5F86AB, base + 0x5F876D};
+    result.callers = {base + game_bindings(game.range).list_hook_contract.background_return_rva, base + game_bindings(game.range).list_hook_contract.p1_return_rva, base + game_bindings(game.range).list_hook_contract.p2_return_rva, base + game_bindings(game.range).list_hook_contract.solo_return_rva};
     return result;
 }
 

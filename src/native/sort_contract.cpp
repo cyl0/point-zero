@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "sort_contract.hpp"
 
 #include <array>
@@ -7,7 +8,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Pin = build_bindings::SortContract::Pin;
+
 
 // Primary evidence: retained 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll,
 // PE64/AMD64, inspected as data. No body intersects a base relocation.
@@ -33,28 +35,7 @@ struct Pin { std::uint32_t rva, size; };
 // Return 870F88 runs only the dispatcher epilogue, leaving cursor policy to
 // its callers. The hook must capture RSI/R15 before executing the qsort body.
 // These extents check executable image ownership; their bodies are not copied.
-constexpr std::array<Pin, 18> pins{{
-    {0x870D60, 668},
-    {0xB776D0, 820},
-    {0xB775D0, 204},
-    {0x871250, 252},
-    {0x871610, 447},
-    {0x9522B0, 33},
-    {0x9493C0, 7},
-    {0x82DFA0, 160},
-    {0x5F97A0, 4},
-    {0x9520A0, 164},
-    {0xB7E4BC, 71},
-    {0x949530, 57},
-    // Immediate bar payload/type accessors; never infer visible from contents.
-    {0x5FEF00, 5},
-    {0x5FEF30, 3},
-    // Direct qsort validation/cookie helpers and its unwind handler.
-    {0xB7A2E0, 32},
-    {0xB77414, 30},
-    {0xB1BC50, 33},
-    {0xB1BB40, 29},
-}};
+
 
 void require(bool ok, const char* why) { if (!ok) throw std::runtime_error(why); }
 
@@ -90,15 +71,15 @@ constexpr std::array comparator_selection{std::byte{0x48}, std::byte{0x8d}, std:
 
 SortContract admit_sort_contract(MemoryView memory, const ImageInfo& game) {
     SortContract result;
-    for (const auto pin : pins) (void)address(memory, game.range, pin);
-    result.hook.body = expected_code(memory, game.range, 0xB776D0, qsort_entry);
-    (void)expected_code(memory, game.range, 0x870F83, dispatcher_call);
-    (void)expected_code(memory, game.range, 0x870E37, comparator_selection);
+    for (const auto pin : game_bindings(game.range).sort_contract.pins) (void)address(memory, game.range, pin);
+    result.hook.body = expected_code(memory, game.range, game_bindings(game.range).sort_contract.qsort_rva, qsort_entry);
+    (void)expected_code(memory, game.range, game_bindings(game.range).sort_contract.dispatcher_call_rva, dispatcher_call);
+    (void)expected_code(memory, game.range, game_bindings(game.range).sort_contract.comparator_selection_rva, comparator_selection);
     const auto base = game.range.base;
-    result.calls.mode = reinterpret_cast<decltype(result.calls.mode)>(base + 0x9493C0);
-    result.calls.level = reinterpret_cast<decltype(result.calls.level)>(base + 0x871250);
-    result.hook.address = base + 0xB776D0;
-    result.hook.caller = base + 0x870F88;
+    result.calls.mode = reinterpret_cast<decltype(result.calls.mode)>(base + game_bindings(game.range).sort_contract.mode_rva);
+    result.calls.level = reinterpret_cast<decltype(result.calls.level)>(base + game_bindings(game.range).sort_contract.level_rva);
+    result.hook.address = base + game_bindings(game.range).sort_contract.qsort_rva;
+    result.hook.caller = base + game_bindings(game.range).sort_contract.sort_return_rva;
     return result;
 }
 

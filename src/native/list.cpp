@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "list.hpp"
 
 #include <windows.h>
@@ -8,7 +9,7 @@
 
 namespace point_zero::native {
 namespace {
-constexpr std::uintptr_t pool_rva = 0xB3DF3E0, sprite_vtable = 0xE6C810;
+
 constexpr std::uintptr_t pool_count = 0x4C0008, pool_slots = 0x260008, sprite_size = 0x260;
 constexpr const char* stock_backgrounds[]{"listb", "listb_secret", "listb_lightning"};
 constexpr const char* private_backgrounds[]{"pz_ux_2_listb", "pz_ux_2_listb_secret", "pz_ux_2_listb_lightning"};
@@ -102,20 +103,20 @@ bool ListRenderer::preload(std::uintptr_t slot) noexcept {
 }
 bool ListRenderer::hide(std::span<const Submitted> submitted, int expected_pool_count) {
     int count{}; std::uintptr_t method{};
-    if (!read_field(memory_, game_.base + pool_rva, pool_count, count) || count != expected_pool_count ||
-        !read_field(memory_, game_.base + sprite_vtable, 0x28, method) ||
+    if (!read_field(memory_, game_.base + game_bindings(game_).list.pool_rva, pool_count, count) || count != expected_pool_count ||
+        !read_field(memory_, game_.base + game_bindings(game_).list.sprite_vtable, 0x28, method) ||
         method != reinterpret_cast<std::uintptr_t>(calls_.visible)) return false;
     // Validate the whole known set before asking the native visibility method
     // to hide any part. Never act on a recycled handle or an unexpected pointer.
     for (const auto& part : submitted) {
         std::uintptr_t vt{}; std::uint32_t stream{}; int root{};
-        if (!read_field(memory_, part.sprite, 0, vt) || vt != game_.base + sprite_vtable ||
+        if (!read_field(memory_, part.sprite, 0, vt) || vt != game_.base + game_bindings(game_).list.sprite_vtable ||
             !read_field(memory_, part.sprite, 8, stream) || stream != part.stream ||
             !read_field(memory_, part.sprite, 0x210, root) || root != part.root ||
             calls_.valid(5, stream) < 0 || calls_.valid(6, root) < 0) return false;
     }
     for (const auto& part : submitted) if (calls_.visible(part.sprite, 0)) return false;
-    return read_field(memory_, game_.base + pool_rva, pool_count, count) && count == expected_pool_count;
+    return read_field(memory_, game_.base + game_bindings(game_).list.pool_rva, pool_count, count) && count == expected_pool_count;
 }
 bool ListRenderer::emit_parts(const ListDraw& request, const Image* const* images,
                               const list_art::Part* positions, int count, int before, std::uintptr_t& result) {
@@ -134,7 +135,7 @@ bool ListRenderer::emit_parts(const ListDraw& request, const Image* const* image
                                         request.alpha, request.layer, request.flags);
         const auto expected = request.manager + pool_slots + sprite_size * static_cast<unsigned>(before + i);
         std::uintptr_t vt{}; std::uint32_t stream{}; int root{}, current_count{};
-        if (sprite != expected || !read_field(memory_, sprite, 0, vt) || vt != game_.base + sprite_vtable ||
+        if (sprite != expected || !read_field(memory_, sprite, 0, vt) || vt != game_.base + game_bindings(game_).list.sprite_vtable ||
             !read_field(memory_, sprite, 8, stream) || !stream || !read_field(memory_, sprite, 0x210, root) || root < 0 ||
             !read_field(memory_, request.manager, pool_count, current_count) || current_count != before + i + 1 ||
             calls_.valid(5, stream) < 0 || calls_.valid(6, root) < 0) { correct = false; break; }
@@ -178,11 +179,11 @@ bool ListRenderer::submit(const ListDraw& request, const Image* const* images,
     return handled;
 }
 bool ListRenderer::draw_impl(const ListDraw& request, std::uintptr_t& result) {
-    if (!request.name || request.manager != game_.base + pool_rva) return false;
+    if (!request.name || request.manager != game_.base + game_bindings(game_).list.pool_rva) return false;
     const auto ret = request.return_address;
-    const bool background = ret == game_.base + 0x5F7E62;
-    if (!background && ret != game_.base + 0x5F865C && ret != game_.base + 0x5F86AB &&
-        ret != game_.base + 0x5F876D) return false;
+    const bool background = ret == game_.base + game_bindings(game_).list.background_return_rva;
+    if (!background && ret != game_.base + game_bindings(game_).list.p1_return_rva && ret != game_.base + game_bindings(game_).list.p2_return_rva &&
+        ret != game_.base + game_bindings(game_).list.solo_return_rva) return false;
     std::array<const Image*, 3> images{};
     list_art::Placement placement{};
     int count{};

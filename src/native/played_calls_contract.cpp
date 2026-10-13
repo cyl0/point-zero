@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "played_calls_contract.hpp"
 #include "image_metadata.hpp"
 #include "cup_contract.hpp"
@@ -7,7 +8,9 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Import = build_bindings::PlayedCallsContract::Import;
+using Pin = build_bindings::PlayedCallsContract::Pin;
+
 struct Entry { std::uint16_t ordinal; std::uint32_t rva; };
 
 // Derived from the retained final bm2dx/afp-core/afp-utils PE files as data.
@@ -22,9 +25,7 @@ struct Entry { std::uint16_t ordinal; std::uint32_t rva; };
 // The remaining unwind-backed pins have no chained descendants; leaf spans
 // include every branch through the final RET/tail JMP, excluding INT3 padding.
 // Unwind metadata derives these bounds; it is not itself admitted for execution.
-constexpr Pin game_code[]{
-    {0x949530, 57},
-};
+
 constexpr Pin core_code[]{
     {0x1EA70, 429},
     {0x48AC0, 56},
@@ -57,10 +58,8 @@ constexpr Entry utils_exports[]{
 // The ordinary native named wrapper at 340390 uses these two imports after
 // stock bitmap forwarding. Its code is admitted by admit_played_sites. The
 // separately hooked stock bitmap slot C91BD8 is owned by SurfaceHooks, not us.
-struct Import { std::uint32_t slot; std::uint16_t ordinal; std::uint32_t target; };
-constexpr Import game_imports[]{
-    {0xC91B88, 106, 0x1DA50}, {0xC91BC8, 116, 0x22D60},
-};
+
+
 
 void require(bool ok, const char* why) { if (!ok) throw std::runtime_error(why); }
 std::uintptr_t address(MemoryView memory, ImageRange image, std::size_t rva,
@@ -96,7 +95,7 @@ void exported(MemoryView memory, const ImageInfo& image, Entry entry) {
 void bindings(MemoryView memory, const NativeModules& modules) {
     for (const auto entry : core_exports) exported(memory, modules.afp, entry);
     for (const auto entry : utils_exports) exported(memory, modules.utils, entry);
-    for (const auto binding : game_imports) {
+    for (const auto binding : game_bindings(modules.game.range).played_calls_contract.game_imports) {
         const auto imported = inspect_import(memory, modules.game, binding.slot);
         require(imported.provider == "afp-core.dll" && imported.name.empty() &&
                 imported.ordinal == binding.ordinal && imported.target ==
@@ -113,7 +112,7 @@ PlayedNativeCalls admit_played_calls(MemoryView memory, const NativeModules& mod
 
 PlayedNativeCalls admit_played_calls(MemoryView memory, const NativeModules& modules, const CupAfp& shared) {
     bindings(memory, modules);
-    for (const auto pin : game_code) code(memory, modules.game.range, pin);
+    for (const auto pin : game_bindings(modules.game.range).played_calls_contract.game_code) code(memory, modules.game.range, pin);
     for (const auto pin : core_code) code(memory, modules.afp.range, pin);
     for (const auto pin : utils_code) code(memory, modules.utils.range, pin);
     const auto g = modules.game.range.base, c = modules.afp.range.base, u = modules.utils.range.base;
@@ -121,7 +120,7 @@ PlayedNativeCalls admit_played_calls(MemoryView memory, const NativeModules& mod
     result.chart.valid = shared.valid;
     result.chart.path = shared.path;
     result.chart.relative = shared.relative;
-    result.chart.style = reinterpret_cast<decltype(result.chart.style)>(g + 0x949530);
+    result.chart.style = reinterpret_cast<decltype(result.chart.style)>(g + game_bindings(modules.game.range).played_calls_contract.chart_style_rva);
     result.package = shared.package;
     result.image_info = reinterpret_cast<decltype(result.image_info)>(u + 0xDC10);
     result.arguments = reinterpret_cast<decltype(result.arguments)>(u + 0xDCD0);

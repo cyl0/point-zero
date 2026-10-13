@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "stepup_contract.hpp"
 
 #include <stdexcept>
@@ -5,7 +6,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Pin = build_bindings::StepupContract::Pin;
+
 
 // Source: retained 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll,
 // SHA256 c61b6dcb8894062e56d60da8ca90053b27f129e1a8e8da5e54457aa42602397d.
@@ -42,13 +44,7 @@ struct Pin { std::uint32_t rva, size; };
 // pe-evidence.json,owner-identities.json,disassembly}. Native lookup, table
 // contents, scene callback state, slot 46 and actual label/resource identity
 // remain the consuming runtime's responsibility.
-constexpr Pin pins[]{
-    {0x601E80, 522},
-    {0x3430E0, 41},
-    {0x8D4EE0, 338},
-    {0x8D9540, 816},
-    {0x602BB0, 91},
-};
+
 
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
 
@@ -72,11 +68,11 @@ PlayedFunction code(MemoryView memory, ImageRange image, Pin pin) {
 } // namespace
 
 StepUpSites admit_stepup_sites(MemoryView memory, const ImageInfo& game) {
-    StepUpSites result{code(memory, game.range, pins[0]), code(memory, game.range, pins[1]),
-                       code(memory, game.range, pins[2]), code(memory, game.range, pins[3]),
-                       code(memory, game.range, pins[4])};
-    result.capture = game.range.base + 0x601F4E;
-    result.named_return = game.range.base + 0x601F5B;
+    StepUpSites result{code(memory, game.range, game_bindings(game.range).stepup_contract.pins[0]), code(memory, game.range, game_bindings(game.range).stepup_contract.pins[1]),
+                       code(memory, game.range, game_bindings(game.range).stepup_contract.pins[2]), code(memory, game.range, game_bindings(game.range).stepup_contract.pins[3]),
+                       code(memory, game.range, game_bindings(game.range).stepup_contract.pins[4])};
+    result.capture = game.range.base + game_bindings(game.range).stepup_contract.capture_rva;
+    result.named_return = game.range.base + game_bindings(game.range).stepup_contract.named_return_rva;
     return result;
 }
 

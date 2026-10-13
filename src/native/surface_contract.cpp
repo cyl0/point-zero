@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "surface_contract.hpp"
 #include "image_metadata.hpp"
 
@@ -8,8 +9,9 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
-constexpr Pin cup{0x6001D0, 1467};
+using Pin = build_bindings::SurfaceContract::Pin;
+
+
 // Retained LDJ-010-2026081900 afp-core.dll, named export XCd229cc000087,
 // ordinal 136. The complete body is [1E8B0,1EA68), not the first unwind
 // fragment [1E8B0,1E8F2) or the first ret at 1E95D. RUNTIME_FUNCTIONs at
@@ -20,7 +22,7 @@ constexpr Pin cup{0x6001D0, 1467};
 // Disk offset 1DCB0, length 440; neither retained body has base relocations.
 constexpr Pin bitmap{0x1E8B0, 440};
 constexpr std::uint16_t bitmap_ordinal = 136;
-constexpr std::size_t bitmap_import = 0xC91BD8;
+
 
 void require(bool ok, const char* why) { if (!ok) throw std::runtime_error(why); }
 
@@ -55,7 +57,7 @@ SurfaceHookSite code(MemoryView memory, ImageRange image, Pin pin, const std::ar
 void bindings(MemoryView memory, const ImageInfo& game, const ImageInfo& afp) {
     detail::MetadataView game_metadata{memory, game.range}, afp_metadata{memory, afp.range};
     exported_bitmap(afp_metadata.view(), afp);
-    const auto imported = inspect_import(game_metadata.view(), game, bitmap_import);
+    const auto imported = inspect_import(game_metadata.view(), game, game_bindings(game.range).surface_contract.bitmap_import);
     require(imported.provider == "afp-core.dll" && imported.name.empty() &&
             imported.ordinal == bitmap_ordinal && imported.target ==
                 address(memory, afp.range, bitmap.rva, 1, RangeUse::image_code),
@@ -71,7 +73,7 @@ SurfaceHookSites admit_surface_sites(MemoryView memory, const ImageInfo& game, c
     constexpr std::array bitmap_entry{std::byte{0x40}, std::byte{0x55}, std::byte{0x56}, std::byte{0x57},
         std::byte{0x48}, std::byte{0x81}, std::byte{0xec}, std::byte{0x90},
         std::byte{0x00}, std::byte{0x00}, std::byte{0x00}};
-    SurfaceHookSites result{code(memory, game.range, cup, cup_entry), code(memory, afp.range, bitmap, bitmap_entry)};
+    SurfaceHookSites result{code(memory, game.range, game_bindings(game.range).surface_contract.cup, cup_entry), code(memory, afp.range, bitmap, bitmap_entry)};
     return result;
 }
 } // namespace point_zero::native

@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "guide.hpp"
 #include "browsing.hpp"
 #include "inline_patch.hpp"
@@ -13,15 +14,15 @@
 
 namespace point_zero::native {
 namespace {
+using Pin = build_bindings::Guide::Pin;
 constexpr std::array names{"pz_guide8_j", "pz_guide8_a", "pz_guide8_k"};
-struct Pin { std::uint32_t rva, size; const char* sha; };
-constexpr Pin builder{0x6833A0, 1632, nullptr};
-constexpr Pin factory{0x34AFB0, 932, nullptr};
-constexpr Pin renderer{0x683D40, 1718, nullptr};
-constexpr Pin capture{0x6840E0, 6,
-    "2c96a8932afbbb93e85faec5ddbd8df4259e98c6ef97e35f91a890c503c26b48"};
-constexpr Pin copy_string{0x369660, 205, nullptr};
-constexpr Pin grow_vector{0x4137D0, 549, nullptr};
+
+
+
+
+
+
+
 
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
 std::vector<std::byte> code(MemoryView memory, ImageRange game, Pin pin) {
@@ -32,7 +33,7 @@ std::vector<std::byte> code(MemoryView memory, ImageRange game, Pin pin) {
     require(readable_range(memory, at, bytes.size(), RangeUse::image_code, game) &&
             read_bytes(memory, at, bytes) &&
             readable_range(memory, at, bytes.size(), RangeUse::image_code, game) &&
-            (pin.rva != capture.rva || ratings::sha256({reinterpret_cast<const char*>(bytes.data()), bytes.size()}) == pin.sha),
+            (pin.rva != game_bindings(game).guide.capture.rva || ratings::sha256({reinterpret_cast<const char*>(bytes.data()), bytes.size()}) == pin.sha),
             "native guide code changed");
     return bytes;
 }
@@ -93,21 +94,21 @@ struct NativeGuide::State {
     bool retained{}, armed{};
 
     State(const AdapterContext& context, const NativeBrowsing& owner, FolderArtCalls calls)
-        : build_patch(context.memory, context.modules.game.range.base + builder.rva,
-                      code(context.memory, context.modules.game.range, builder),
+        : build_patch(context.memory, context.modules.game.range.base + game_bindings(context.modules.game.range).guide.builder.rva,
+                      code(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.builder),
                       reinterpret_cast<std::uintptr_t>(&build)),
-          create_patch(context.memory, context.modules.game.range.base + capture.rva,
-                       code(context.memory, context.modules.game.range, capture), create),
+          create_patch(context.memory, context.modules.game.range.base + game_bindings(context.modules.game.range).guide.capture.rva,
+                       code(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.capture), create),
           original_build(reinterpret_cast<Build>(build_patch.original())),
-          copy(reinterpret_cast<Copy>(context.modules.game.range.base + copy_string.rva)),
-          grow(reinterpret_cast<Grow>(context.modules.game.range.base + grow_vector.rva)),
+          copy(reinterpret_cast<Copy>(context.modules.game.range.base + game_bindings(context.modules.game.range).guide.copy_string.rva)),
+          grow(reinterpret_cast<Grow>(context.modules.game.range.base + game_bindings(context.modules.game.range).guide.grow_vector.rva)),
           browsing(owner), art(calls),
-          build_caller(context.modules.game.range.base + 0x683E44),
-          create_call(context.modules.game.range.base + 0x6840E6) {
-        executable(context.memory, context.modules.game.range, factory);
-        executable(context.memory, context.modules.game.range, renderer);
-        executable(context.memory, context.modules.game.range, copy_string);
-        executable(context.memory, context.modules.game.range, grow_vector);
+          build_caller(context.modules.game.range.base + game_bindings(context.modules.game.range).guide.guide_build_caller_rva),
+          create_call(context.modules.game.range.base + game_bindings(context.modules.game.range).guide.guide_create_call_rva) {
+        executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.factory);
+        executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.renderer);
+        executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.copy_string);
+        executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.grow_vector);
         for (const auto name : names)
             require(art.global_id(name) == -2, "native guide image name already present");
     }

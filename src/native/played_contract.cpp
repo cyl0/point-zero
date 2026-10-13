@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "played_contract.hpp"
 
 #include <stdexcept>
@@ -5,7 +6,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Pin = build_bindings::PlayedContract::Pin;
+
 
 // Source: retained 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll,
 // SHA256 c61b6dcb8894062e56d60da8ca90053b27f129e1a8e8da5e54457aa42602397d.
@@ -38,14 +40,7 @@ struct Pin { std::uint32_t rva, size; };
 // research_v1_remaining_contracts_20261001/modes/pe-evidence.json plus
 // ordinary_decide, hud and ordinary_result disassemblies. Transitive helper
 // implementations, imported targets, stock tables and live owners excluded.
-constexpr Pin pins[]{
-    {0x340390, 171},
-    {0x601610, 1931},
-    {0x904470, 478},
-    {0x91C120, 1269},
-    {0x834510, 50},
-    {0x925980, 139},
-};
+
 
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
 
@@ -69,15 +64,15 @@ PlayedFunction code(MemoryView memory, ImageRange image, Pin pin) {
 } // namespace
 
 PlayedSites admit_played_sites(MemoryView memory, const ImageInfo& game) {
-    PlayedSites result{code(memory, game.range, pins[0]), code(memory, game.range, pins[1]),
-                       code(memory, game.range, pins[2]), code(memory, game.range, pins[3]),
-                       code(memory, game.range, pins[4])};
-    result.notes_update = code(memory, game.range, pins[5]);
+    PlayedSites result{code(memory, game.range, game_bindings(game.range).played_contract.pins[0]), code(memory, game.range, game_bindings(game.range).played_contract.pins[1]),
+                       code(memory, game.range, game_bindings(game.range).played_contract.pins[2]), code(memory, game.range, game_bindings(game.range).played_contract.pins[3]),
+                       code(memory, game.range, game_bindings(game.range).played_contract.pins[4])};
+    result.notes_update = code(memory, game.range, game_bindings(game.range).played_contract.pins[5]);
     const auto base = game.range.base;
-    result.captures = {base + 0x601715, base + 0x601749, base + 0x9045FD, base + 0x91C56D};
-    result.named_returns = {base + 0x601725, base + 0x601759, base + 0x904610, base + 0x83453C};
-    result.notes_capture = base + 0x92599A;
-    result.result_returns = {base + 0x91C5A5, base + 0x91C5BA};
+    result.captures = {base + game_bindings(game.range).played_contract.confirmation_first_rva, base + game_bindings(game.range).played_contract.confirmation_second_rva, base + game_bindings(game.range).played_contract.hud_capture_rva, base + game_bindings(game.range).played_contract.result_capture_rva};
+    result.named_returns = {base + game_bindings(game.range).played_contract.confirmation_first_return_rva, base + game_bindings(game.range).played_contract.confirmation_second_return_rva, base + game_bindings(game.range).played_contract.hud_return_rva, base + game_bindings(game.range).played_contract.named_return_rva};
+    result.notes_capture = base + game_bindings(game.range).played_contract.notes_capture_rva;
+    result.result_returns = {base + game_bindings(game.range).played_contract.result_return_first_rva, base + game_bindings(game.range).played_contract.result_return_second_rva};
     return result;
 }
 

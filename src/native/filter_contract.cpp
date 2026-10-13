@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "filter_contract.hpp"
 
 #include <array>
@@ -8,26 +9,16 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Pin = build_bindings::FilterContract::Pin;
 
-constexpr std::array<Pin, 9> code_pins{{
-    {0x6E9010,131},
-    {0x6E8E40,32},
-    {0x893FA0,506},
-    {0x9493C0,7},
-    {0x885440,8},
-    {0x883290,8},
-    {0x68B780,541},
-    {0x82DFA0,160},
-    {0x5FD730,1172},
-}};
+
+
 // Six music IDs directly traversed by the admitted candidate wrapper.
-constexpr Pin candidate_table{0xD57FC8,24};
+
 // RTTI prefix + exactly seven level slots / two control slots. Read binding
 // values, not raw pointer hashes, so relocated images are accepted.
-constexpr std::array<std::uint32_t, 8> level_bindings{
-    0xE9B0D0,0x68BCA0,0x6E8E40,0x63E9C0,0x68BDE0,0x68BDF0,0x68C010,0x68C020};
-constexpr std::array<std::uint32_t, 3> control_bindings{0xE9B1D8,0x68C050,0x68C030};
+
+
 
 void require(bool ok, const char* why) { if (!ok) throw std::runtime_error(why); }
 std::uintptr_t address(MemoryView memory, ImageRange image, std::uint32_t rva,
@@ -71,20 +62,20 @@ void bindings(MemoryView memory, ImageRange image, std::uint32_t rva,
 FilterContract admit_filter_contract(MemoryView memory, const ImageInfo& game) {
     static_assert(sizeof(std::uintptr_t) == 8);
     FilterContract result;
-    for (const auto pin : code_pins) {
-        FilterSite* site = pin.rva == 0x6E9010 ? &result.sites.apply :
-                           pin.rva == 0x6E8E40 ? &result.sites.level :
-                           pin.rva == 0x893FA0 ? &result.sites.candidate : nullptr;
+    for (const auto pin : game_bindings(game.range).filter_contract.code_pins) {
+        FilterSite* site = pin.rva == game_bindings(game.range).filter_contract.filter_apply_rva ? &result.sites.apply :
+                           pin.rva == game_bindings(game.range).filter_contract.filter_level_rva ? &result.sites.level :
+                           pin.rva == game_bindings(game.range).filter_contract.filter_candidate_rva ? &result.sites.candidate : nullptr;
         if (site) *site = {game.range.base + pin.rva, copy_checked(memory, game.range, pin, RangeUse::image_code)};
         else (void)address(memory, game.range, pin.rva, pin.size, RangeUse::image_code);
     }
-    (void)address(memory, game.range, candidate_table.rva, candidate_table.size, RangeUse::image_read);
-    bindings(memory, game.range, 0xCC1488, level_bindings);
-    bindings(memory, game.range, 0xCC1538, control_bindings);
-    result.sites.apply_caller = game.range.base + 0x89407A;
-    result.sites.level_caller = game.range.base + 0x6E9063;
-    result.mode = reinterpret_cast<decltype(result.mode)>(game.range.base + 0x9493C0);
-    result.rebuild = reinterpret_cast<decltype(result.rebuild)>(game.range.base + 0x5FD730);
+    (void)address(memory, game.range, game_bindings(game.range).filter_contract.candidate_table.rva, game_bindings(game.range).filter_contract.candidate_table.size, RangeUse::image_read);
+    bindings(memory, game.range, game_bindings(game.range).filter_contract.level_table_rva, game_bindings(game.range).filter_contract.level_bindings);
+    bindings(memory, game.range, game_bindings(game.range).filter_contract.control_table_rva, game_bindings(game.range).filter_contract.control_bindings);
+    result.sites.apply_caller = game.range.base + game_bindings(game.range).filter_contract.filter_apply_caller_rva;
+    result.sites.level_caller = game.range.base + game_bindings(game.range).filter_contract.sites_level_caller_rva;
+    result.mode = reinterpret_cast<decltype(result.mode)>(game.range.base + game_bindings(game.range).filter_contract.mode_rva);
+    result.rebuild = reinterpret_cast<decltype(result.rebuild)>(game.range.base + game_bindings(game.range).filter_contract.rebuild_rva);
     return result;
 }
 

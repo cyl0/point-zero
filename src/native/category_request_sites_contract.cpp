@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_request_sites_contract.hpp"
 #include "ratings/ratings.hpp"
 
@@ -11,21 +12,15 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t begin, end;  };
+using Pin = build_bindings::CategoryRequestSitesContract::Pin;
+
 // Retained LDJ2026081900 game SHA c61b6dcb8894062e56d60da8ca90053b27f129e1a8e8da5e54457aa42602397d.
 // Complete normal bodies, not short site signatures. Consumer/caller EH funclets
 // and transitive engine calls remain outside this finite admission.
-constexpr std::array<Pin, 6> pins{{
-    {0x609280, 0x609498},
-    {0x6094A0, 0x6098BD},
-    {0x6098C0, 0x609B7B},
-    {0x6077D0, 0x607CC0},
-    {0x883280, 0x883288},
-    {0x8EC450, 0x8EC742},
-}};
-constexpr std::array<std::uint32_t, 3> captures{0x6092D8, 0x609652, 0x6099CA};
-constexpr std::array<std::uint32_t, 3> cancels{0x60944E, 0x60976F, 0x609B31};
-constexpr std::array<std::uint32_t, 3> callers{0x6078AC, 0x60788C, 0x60789C};
+
+
+
+
 // Retained Fervidex SHA0d3f2f10ff140e96cf5b473257ed34b6feb77828646583398f13a16ff5f47648.
 // The request leaf's tail wrapper and all five helper unwind fragments are
 // included. No selected body has a DIR64 relocation. Other code is not vetoed.
@@ -34,8 +29,8 @@ constexpr std::array<Pin, 3> foreign_pins{{
     {0xD7A90, 0xD7A9D},
     {0xD7CD0, 0xD7F03},
 }};
-constexpr std::array<std::uint32_t, 2> foreign_sites{0x8EC6F8, 0x6098F6};
-constexpr std::array<std::uint32_t, 2> foreign_targets{0x800E70, 0x7D60E0};
+
+
 constexpr std::array<std::array<unsigned char, 5>, 2> originals{{
     {0xE8, 0x73, 0x47, 0xF1, 0xFF}, {0xE8, 0xE5, 0xC7, 0x1C, 0x00}
 }};
@@ -127,11 +122,11 @@ Foreign foreign(MemoryView memory, ImageRange game, ImageRange module) {
         auto& body = result.bodies[i];
         body = copy(memory, module, pin.begin, pin.end - pin.begin);
     }
-    for (std::size_t i = 0; i < foreign_sites.size(); ++i) {
+    for (std::size_t i = 0; i < game_bindings(game).category_request_sites_contract.foreign_sites.size(); ++i) {
         auto& chain = result.chains[i];
-        const auto at = address(game, foreign_sites[i], 5);
-        const auto target = address(game, foreign_targets[i], 1);
-        chain.incoming = copy(memory, game, foreign_sites[i], 5);
+        const auto at = address(game, game_bindings(game).category_request_sites_contract.foreign_sites[i], 5);
+        const auto target = address(game, game_bindings(game).category_request_sites_contract.foreign_targets[i], 1);
+        chain.incoming = copy(memory, game, game_bindings(game).category_request_sites_contract.foreign_sites[i], 5);
         if (prefix(chain.incoming, originals[i])) continue;
         require(chain.incoming[0] == std::byte{0xE9}, "unknown Fervidex incoming branch");
         const auto relay = relative(at, field<std::int32_t>(chain.incoming, 1));
@@ -162,21 +157,21 @@ void normalize(std::span<std::byte> bytes, std::size_t offset, const Chain& chai
     for (std::size_t i = 0; i < 5; ++i) bytes[offset + i] = std::byte{originals[kind][i]};
 }
 struct Observation {
-    std::array<std::vector<std::byte>, pins.size()> bodies;
+    std::array<std::vector<std::byte>, build_bindings::CategoryRequestSitesContract{}.pins.size()> bodies;
     Foreign routes;
 };
 Observation observe(MemoryView memory, ImageRange game, ImageRange fv) {
     Observation result;
     // Manager leaf RIP operand: bound the complete slot without reading its value.
-    (void)address(game, 0xAAB3B08, 8);
-    for (std::size_t i = 0; i < pins.size(); ++i) {
-        const auto pin = pins[i];
+    (void)address(game, game_bindings(game).category_request_sites_contract.category_manager_rva, 8);
+    for (std::size_t i = 0; i < game_bindings(game).category_request_sites_contract.pins.size(); ++i) {
+        const auto pin = game_bindings(game).category_request_sites_contract.pins[i];
         result.bodies[i] = copy(memory, game, pin.begin, pin.end - pin.begin);
     }
     if (fv.base) {
         result.routes = foreign(memory, game, fv);
-        normalize(result.bodies[2], foreign_sites[1] - pins[2].begin, result.routes.chains[1], 1);
-        normalize(result.bodies[5], foreign_sites[0] - pins[5].begin, result.routes.chains[0], 0);
+        normalize(result.bodies[2], game_bindings(game).category_request_sites_contract.foreign_sites[1] - game_bindings(game).category_request_sites_contract.pins[2].begin, result.routes.chains[1], 1);
+        normalize(result.bodies[5], game_bindings(game).category_request_sites_contract.foreign_sites[0] - game_bindings(game).category_request_sites_contract.pins[5].begin, result.routes.chains[0], 0);
     } else require(!fv.size, "absent Fervidex has a nonempty range");
     return result;
 }
@@ -189,11 +184,11 @@ CategoryRequestSites admit_category_request_sites(MemoryView memory, const Image
     auto observed = observe(memory, game.range, range);
     CategoryRequestSites result;
     result.game = game.range; result.fervidex = range;
-    result.manager_getter = address(game.range, pins[4].begin, 8);
+    result.manager_getter = address(game.range, game_bindings(game.range).category_request_sites_contract.pins[4].begin, 8);
     for (std::size_t i = 0; i < result.entries.size(); ++i) {
-        const auto pin = pins[i];
+        const auto pin = game_bindings(game.range).category_request_sites_contract.pins[i];
         result.entries[i] = {address(game.range, pin.begin, pin.end - pin.begin), std::move(observed.bodies[i]),
-            address(game.range, captures[i], 5), address(game.range, cancels[i], 1), address(game.range, callers[i], 1)};
+            address(game.range, game_bindings(game.range).category_request_sites_contract.captures[i], 5), address(game.range, game_bindings(game.range).category_request_sites_contract.cancels[i], 1), address(game.range, game_bindings(game.range).category_request_sites_contract.callers[i], 1)};
     }
     return result;
 }

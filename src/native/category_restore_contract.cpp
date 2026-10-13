@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_restore_contract.hpp"
 
 #include <array>
@@ -7,7 +8,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t begin, end; };
+using Pin = build_bindings::CategoryRestoreContract::Pin;
+
 
 // docs/category-filter-refresh-evidence.md supplies the restore route and
 // retained body hashes. Independently inspected the final PE as DATA:
@@ -61,17 +63,8 @@ struct Pin { std::uint32_t begin, end; };
 // mask224h and song presentation but its graph branch admits only2/9. RANDOM
 // graph branch admits only2; event5 still updates its difficulty highlights.
 // The wrapper's explicit graph call is therefore required independently.
-constexpr std::array<Pin, 8> pins{{
-    {0x603BF0, 0x603C9A},
-    {0x607F30, 0x607FF7},
-    {0x6060B0, 0x6063E8},
-    {0x5FD610, 0x5FD725},
-    {0x608060, 0x60849B},
-    {0x6084A0, 0x608843},
-    {0x608850, 0x608DCB},
-    {0x608DD0, 0x609269},
-}};
-static_assert([] { std::size_t n{}; for (const auto p : pins) n += p.end - p.begin; return n; }() == 6064);
+
+static_assert([] { std::size_t n{}; for (const auto p : build_bindings::CategoryRestoreContract{}.pins) n += p.end - p.begin; return n; }() == 6064);
 
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
 std::uintptr_t address(MemoryView memory, ImageRange image, Pin pin) {
@@ -95,10 +88,10 @@ void check_body(MemoryView memory, ImageRange image, Pin pin) {
 
 CategoryRestoreCalls admit_category_restore_contract(MemoryView memory, const ImageInfo& game) {
     static_assert(sizeof(std::uintptr_t) == 8);
-        for (const auto pin : pins) check_body(memory, game.range, pin);
+        for (const auto pin : game_bindings(game.range).category_restore_contract.pins) check_body(memory, game.range, pin);
     CategoryRestoreCalls result;
-    result.current = reinterpret_cast<decltype(result.current)>(game.range.base + 0x603BF0);
-    result.restore = reinterpret_cast<decltype(result.restore)>(game.range.base + 0x607F30);
+    result.current = reinterpret_cast<decltype(result.current)>(game.range.base + game_bindings(game.range).category_restore_contract.current_rva);
+    result.restore = reinterpret_cast<decltype(result.restore)>(game.range.base + game_bindings(game.range).category_restore_contract.restore_rva);
     return result;
 }
 

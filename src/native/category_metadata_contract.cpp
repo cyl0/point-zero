@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_metadata_contract.hpp"
 
 #include <algorithm>
@@ -10,7 +11,7 @@
 
 namespace point_zero::native {
 namespace {
-constexpr std::uint32_t game_rva = 0x86EF00, pl_rva = 0x3FE10;
+
 constexpr std::size_t game_size = 0x3B, pl_size = 0xC2;
 constexpr const char* game_sha = "387b888b3cd9055c660209f32531242df6bdb7e30a8f6f47c2b6fe02c5245342";
 constexpr const char* pl_sha = "8ca49ba34639dfeb732b945a6770507f05982343669753d6501841adc1108f48";
@@ -83,8 +84,8 @@ struct Observation {
 };
 Observation observe(MemoryView memory, const ImageInfo& game, const std::optional<ImageInfo>& pl) {
     Observation result;
-    result.game = copy_image(memory, game.range, game_rva, game_size, RangeUse::image_code);
-    const auto native = address(game.range, game_rva, game_size);
+    result.game = copy_image(memory, game.range, game_bindings(game.range).category_metadata_contract.game_rva, game_size, RangeUse::image_code);
+    const auto native = address(game.range, game_bindings(game.range).category_metadata_contract.game_rva, game_size);
     if (prefix(result.game, 0, original, 6)) {
         result.site = {native, result.game};
         return result;
@@ -95,11 +96,11 @@ Observation observe(MemoryView memory, const ImageInfo& game, const std::optiona
     require(e9 || ff, "category metadata unsupported Playlister game patch shape");
     const auto stolen = e9 ? 6U : 15U;
     const auto trampoline_size = e9 ? 25U : 29U;
-    const auto implementation = address(pl->range, pl_rva, pl_size);
+    const auto implementation = address(pl->range, game_bindings(game.range).category_metadata_contract.pl_rva, pl_size);
     require(game.range.base + game.range.size <= pl->range.base ||
             pl->range.base + pl->range.size <= game.range.base,
             "category metadata game and Playlister images overlap");
-    result.site = {implementation, copy_image(memory, pl->range, pl_rva, pl_size, RangeUse::image_code)};
+    result.site = {implementation, copy_image(memory, pl->range, game_bindings(game.range).category_metadata_contract.pl_rva, pl_size, RangeUse::image_code)};
     // Selected stable hook fields only: no mutex, allocator control block,
     // original-byte vector, playlist data, config or external callbacks.
     result.bindings = copy_image(memory, pl->range, 0xFE740, 16, RangeUse::image_read);

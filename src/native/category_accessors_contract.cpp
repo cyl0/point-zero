@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_accessors_contract.hpp"
 
 #include <algorithm>
@@ -11,6 +12,7 @@
 
 namespace point_zero::native {
 namespace {
+using Pin = build_bindings::CategoryAccessorsContract::Pin;
 // Primary retained PE data (not whole-module hashes at runtime):
 // 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll:
 // c61b6dcb8894062e56d60da8ca90053b27f129e1a8e8da5e54457aa42602397d
@@ -56,38 +58,8 @@ namespace {
 // CALL86F230 at +9; setup_ff explicitly REFUSES relative instructions, so that
 // route is rejected rather than inventing a relocation scheme. Real PL entry
 // prefixes are likewise nonrelative and suitable for the caller's own hook.
-struct Pin {
-    std::uint32_t begin, end;
-    std::uint32_t pl_begin, pl_end;
-    std::uint32_t object;
-    unsigned near_stolen, far_stolen;
-    std::array<unsigned char,16> original;
-};
-constexpr Pin pins[]{
-    {0x86EE30,0x86EEA5,
-     0x40AB0,0x40B67,0xFE530,5,15,
-     {0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xEC,0x20}},
-    {0x86EEB0,0x86EEF5,
-     0x40B70,0x40C52,0xFE160,6,0,
-     {0x40,0x53,0x48,0x83,0xEC,0x20}},
-    {0x86F570,0x86F5D6,
-     0x3FC00,0x3FCDE,0xFE2F0,5,15,
-     {0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x6C,0x24,0x10,0x48,0x89,0x74,0x24,0x18}},
-    {0x86F5E0,0x86F64D,
-     0,0,0,5,0,{0x48,0x89,0x5C,0x24,0x08}},
-    {0x86F750,0x86F78C,
-     0x429A0,0x42A98,0xFDF50,5,16,
-     {0x48,0x89,0x5C,0x24,0x08,0x57,0x48,0x83,0xEC,0x20,0x48,0x63,0xDA,0x48,0x8B,0xF9}},
-    {0x86F8A0,0x86F8DC,
-     0x427A0,0x42898,0xFE7F0,5,16,
-     {0x48,0x89,0x5C,0x24,0x08,0x57,0x48,0x83,0xEC,0x20,0x48,0x63,0xDA,0x48,0x8B,0xF9}},
-    {0x86FDB0,0x86FDEC,
-     0x428A0,0x42998,0xFE000,5,16,
-     {0x48,0x89,0x5C,0x24,0x08,0x57,0x48,0x83,0xEC,0x20,0x48,0x63,0xDA,0x48,0x8B,0xF9}},
-    {0x86FF00,0x86FF3C,
-     0x42680,0x42778,0xFE0B0,5,16,
-     {0x48,0x89,0x5C,0x24,0x08,0x57,0x48,0x83,0xEC,0x20,0x48,0x63,0xDA,0x48,0x8B,0xF9}},
-};
+
+
 constexpr std::array<unsigned char,6> indirect{0xFF,0x25,0,0,0,0};
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
 template<class T> T value(const std::vector<std::byte>& bytes, std::size_t offset) {
@@ -198,7 +170,7 @@ Route observe_route(MemoryView memory, const ImageInfo& game, const std::optiona
                 value<std::uintptr_t>(result.trampoline,stolen + 6) == native + stolen,
                 "category accessors far original continuation changed");
     }
-    if (pin.begin == 0x86EEB0) {
+    if (pin.begin == game_bindings(game.range).category_accessors_contract.category_accessor_rva) {
         result.active_offset = copy_image(memory,pl->range,0x100860,8,RangeUse::image_read);
         require(value<std::uint64_t>(result.active_offset,0) == 0x2A420, "category accessors PL active ID field changed");
     }
@@ -210,8 +182,8 @@ struct Observation {
 };
 Observation observe(MemoryView memory, const ImageInfo& game, const std::optional<ImageInfo>& pl) {
     Observation result;
-    for (unsigned i = 0; i < result.routes.size(); ++i) result.routes[i] = observe_route(memory,game,pl,pins[i]);
-    result.style = {address(game.range,0x86F230,21),copy_image(memory,game.range,0x86F230,21,RangeUse::image_code)};
+    for (unsigned i = 0; i < result.routes.size(); ++i) result.routes[i] = observe_route(memory,game,pl,game_bindings(game.range).category_accessors_contract.pins[i]);
+    result.style = {address(game.range,game_bindings(game.range).category_accessors_contract.category_style_rva,21),copy_image(memory,game.range,game_bindings(game.range).category_accessors_contract.category_style_rva,21,RangeUse::image_code)};
     return result;
 }
 // Remaining dependencies: native range-test9771E0, PL mutex/exception routines
@@ -222,7 +194,7 @@ Observation observe(MemoryView memory, const ImageInfo& game, const std::optiona
 CategoryAccessorSites admit_category_accessors_contract(
     MemoryView memory, const ImageInfo& game, const std::optional<ImageInfo>& playlister) {
     static_assert(sizeof(std::uintptr_t) == 8);
-    static_assert(std::size(pins) == static_cast<unsigned>(CategoryAccessor::count));
+    static_assert(std::tuple_size_v<decltype(build_bindings::CategoryAccessorsContract::pins)> == static_cast<unsigned>(CategoryAccessor::count));
     auto observed = observe(memory, game, playlister);
     CategoryAccessorSites result;
     for (unsigned i = 0; i < result.entries.size(); ++i) result.entries[i] = std::move(observed.routes[i].site);

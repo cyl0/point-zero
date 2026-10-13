@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "list_chart.hpp"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -15,8 +16,8 @@ namespace {
 static_assert(sizeof(std::uintptr_t) == 8);
 // Reviewed LDJ2026081900 final branch of native_resource_bindings. These are
 // complete bitmap-call return RVAs, not function entries or low address bits.
-constexpr std::uintptr_t p1_site = 0x5F865C, p2_site = 0x5F86AB, solo_site = 0x5F876D;
-constexpr std::uintptr_t normal_names = 0x105D0F0, compact_names = 0x105D300;
+
+
 
 struct Owner {
     std::uintptr_t music{};
@@ -54,7 +55,7 @@ bool resolve(MemoryView memory, ImageRange game, const Catalog& catalog,
     if (!memory.read || !calls.player_count || !calls.style || game.base < 0x10000 ||
         !contains(game.base, game.size, return_address, 1)) return false;
     const auto site = return_address - game.base;
-    if (site != solo_site && site != p1_site && site != p2_site) return false;
+    if (site != game_bindings(game).list_chart.solo_site && site != game_bindings(game).list_chart.p1_site && site != game_bindings(game).list_chart.p2_site) return false;
 
     Owner first;
     Mode mode;
@@ -64,24 +65,24 @@ bool resolve(MemoryView memory, ImageRange game, const Catalog& catalog,
     int player{};
     bool compact{};
     if (mode.count == 1) {
-        if (site != solo_site) return false;
+        if (site != game_bindings(game).list_chart.solo_site) return false;
         player = mode.active;
     } else {
         for (const auto difficulty : first.difficulties)
             if (difficulty < 0 || difficulty > 4) return false;
         compact = first.difficulties[0] != first.difficulties[1];
         if (compact) {
-            if (site == p1_site) player = 0;
-            else if (site == p2_site) player = 1;
+            if (site == game_bindings(game).list_chart.p1_site) player = 0;
+            else if (site == game_bindings(game).list_chart.p2_site) player = 1;
             else return false;
-        } else if (site != p2_site) return false; // Equal pair emits one normal label for P1.
+        } else if (site != game_bindings(game).list_chart.p2_site) return false; // Equal pair emits one normal label for P1.
     }
     const auto difficulty = first.difficulties[player];
     if (difficulty < 0 || difficulty > 4) return false;
     const auto* row = catalog.find({first.song, mode.style, difficulty});
     if (!row) return false;
 
-    const auto name_rva = (compact ? compact_names : normal_names) +
+    const auto name_rva = (compact ? game_bindings(game).list_chart.compact_names : game_bindings(game).list_chart.normal_names) +
         sizeof(std::uintptr_t) * static_cast<std::size_t>(13 * difficulty + row->native_level);
     if (name_rva > UINTPTR_MAX - game.base) return false;
     const auto name_slot = game.base + name_rva;

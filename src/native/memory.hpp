@@ -18,7 +18,13 @@ struct MemoryView {
     bool (*query)(void*, std::uintptr_t, MemoryRegion&) noexcept{};
     bool operator==(const MemoryView&) const = default;
 };
-struct ImageRange { std::uintptr_t base{}; std::size_t size{}; };
+struct GameBindings;
+extern const GameBindings august_bindings;
+struct ImageRange {
+    std::uintptr_t base{};
+    std::size_t size{};
+    const GameBindings* bindings = &august_bindings;
+};
 enum class RangeUse { image_read, image_code, private_code, private_writable };
 
 // Checked half-open ranges, including overflow. No remote-process access.

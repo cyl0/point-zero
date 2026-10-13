@@ -11,6 +11,13 @@ struct GameBuildIdentity {
     bool operator==(const GameBuildIdentity&) const = default;
 };
 
+struct GameBuild {
+    GameBuildIdentity identity;
+    std::string_view datecode;
+    const GameBindings* bindings;
+};
+const GameBuild& select_game_build(MemoryView, const ImageInfo&);
+
 // Intrinsic identity of the selected loaded PE image.
 GameBuildIdentity inspect_game_build(MemoryView, const ImageInfo&);
 std::string_view supported_game_datecode(const GameBuildIdentity&) noexcept;

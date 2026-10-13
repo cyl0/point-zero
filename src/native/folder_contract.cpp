@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "folder_contract.hpp"
 
 #include <array>
@@ -8,7 +9,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size;  };
+using Pin = build_bindings::FolderContract::Pin;
+
 // Retained final bm2dx.dll, read as PE data. Complete extents recovered from
 // all 57,745 .pdata entries and their unwind chains; no body relocations.
 // Row: one record [5F4BC0,5F5A88). Metadata +20 selects its image and +28
@@ -20,12 +22,7 @@ struct Pin { std::uint32_t rva, size;  };
 // consumes those dimensions when binding the differently sized whole labels.
 // Shared bitmap/named emitter bodies are already owned/admitted by surfaces;
 // including those patched bodies here would require unnecessary normalization.
-constexpr Pin pins[]{
-    {0x5F4BC0, 3784},
-    {0x5FF070, 787},
-    {0x340A50, 356},
-    {0x34B940, 545},
-};
+
 constexpr Pin resolver_pins[]{
     {0x1E7E0, 110},
     {0x20E0, 229},
@@ -61,7 +58,7 @@ void consumers(MemoryView memory, ImageRange game) {
     // These consumers receive private image names through native metadata.
     // POINT ZERO neither patches nor decodes their instructions. Foreign row
     // hooks stay owned by their providers; no Playlister-specific veto applies.
-    for (const auto pin : pins) code(memory, game, pin);
+    for (const auto pin : game_bindings(game).folder_contract.pins) code(memory, game, pin);
 }
 std::uintptr_t cell(MemoryView memory, ImageRange image, std::size_t rva) {
     require(image.base >= 0x10000 && contains(image.base, image.size, image.base, image.size) &&

@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "original_filter.hpp"
 
 #include <windows.h>
@@ -61,14 +62,14 @@ void OriginalFilter::begin(Frame& frame, bool effective) noexcept {
         const auto game = context_.modules.game.range;
         const auto& request = frame.request;
         if (game.base < 0x10000 || !contains(game.base, game.size, game.base, game.size) ||
-            game.size < 0xAB9EE78 + 12 || request.caller != game.base + 0x89407A ||
+            game.size < game_bindings(context_.modules.game.range).original_filter.filter_candidate_state_rva + 12 || request.caller != game.base + game_bindings(context_.modules.game.range).original_filter.filter_apply_caller_rva ||
             request.set != 1 || request.style < 0 || request.style > 1 ||
             !(request.category == 110 || (request.category >= 210 && request.category <= 214)) ||
-            request.candidate != game.base + 0xAB9EE78) return;
+            request.candidate != game.base + game_bindings(context_.modules.game.range).original_filter.filter_candidate_state_rva) return;
         const auto mode = mode_();
         if (mode != 0 && mode != 6) return;
         std::uintptr_t manager{};
-        if (!read_field(context_.memory, game.base, 0xAAB3B08, manager) || manager < 0x10000) return;
+        if (!read_field(context_.memory, game.base, game_bindings(context_.modules.game.range).original_filter.category_manager_rva, manager) || manager < 0x10000) return;
         const auto offset = 16 + 208 * (230ULL * request.style + request.category);
         if (offset > UINTPTR_MAX - manager ||
             !read_original_filter_state(context_.memory, game, manager + offset, request.style, frame.owner) ||
@@ -120,7 +121,7 @@ bool OriginalFilter::rebuild_owner(Rebuild& out) const {
     const auto game = context_.modules.game.range;
     const auto pointer = [](std::uintptr_t at) { return at >= 0x10000 && !(at & 7); };
     if (!pointer(out.category) || out.style < 0 || out.style > 1 ||
-        game.base < 0x10000 || !contains(game.base, game.size, game.base, game.size) || game.size < 0xAAB3CA0)
+        game.base < 0x10000 || !contains(game.base, game.size, game.base, game.size) || game.size < game_bindings(context_.modules.game.range).original_filter.filter_state_end_rva)
         return false;
     out.view = context_.state.view();
     if (out.view.phase != FeaturePhase::ready) return false;
@@ -131,11 +132,11 @@ bool OriginalFilter::rebuild_owner(Rebuild& out) const {
     std::uint8_t has_set{};
     if (!read_field(memory, out.category, 0, out.id) ||
         !(out.id == 110 || (out.id >= 210 && out.id <= 214)) ||
-        !read_field(memory, game.base, 0xAAB3B08, out.manager) || !pointer(out.manager)) return false;
+        !read_field(memory, game.base, game_bindings(context_.modules.game.range).original_filter.category_manager_rva, out.manager) || !pointer(out.manager)) return false;
     const auto offset = 16 + 208 * (230ULL * out.style + out.id);
     if (offset > UINTPTR_MAX - out.manager || out.category != out.manager + offset ||
         !read_field(memory, out.manager, 0x175D0, out.list) || !pointer(out.list) ||
-        !read_field(memory, out.list, 0, vtable) || vtable != game.base + 0xD53278 ||
+        !read_field(memory, out.list, 0, vtable) || vtable != game.base + game_bindings(context_.modules.game.range).original_filter.list_vtable_rva ||
         !read_field(memory, out.category, 160, menu_id) || menu_id != out.id ||
         !read_field(memory, out.category, 164, menu_set) || menu_set != 1 ||
         // Rebuilding mutates native membership: retain the stricter canonical
@@ -144,8 +145,8 @@ bool OriginalFilter::rebuild_owner(Rebuild& out) const {
         !read_field(memory, out.category, 0x10, out.inserted) || out.inserted < 0 ||
         !read_field(memory, out.category, 0x18, out.difficulty) ||
         !read_field(memory, out.category, 0x78, out.charts) ||
-        !read_field(memory, game.base, 0xAAB3C90, out.active) || !pointer(out.active) ||
-        !read_field(memory, game.base, 0xAAB3C98, out.saved) || !pointer(out.saved)) return false;
+        !read_field(memory, game.base, game_bindings(context_.modules.game.range).original_filter.active_filter_rva, out.active) || !pointer(out.active) ||
+        !read_field(memory, game.base, game_bindings(context_.modules.game.range).original_filter.saved_filter_rva, out.saved) || !pointer(out.saved)) return false;
     for (const int difficulty : out.difficulty) if (difficulty < 0 || difficulty > 4) return false;
     const auto& v = out.charts;
     if (v != category_layout::Vector{} &&
@@ -186,7 +187,7 @@ bool OriginalFilter::rebuild(std::uintptr_t category, int style, NativeFilterReb
 }
 void OriginalFilter::restore_working(const CategorySummaryRequest& summary, std::uintptr_t caller, bool completed) {
     auto* const request = rebuilding_;
-    if (!request || !request->setter || caller != context_.modules.game.range.base + 0x5FDB25 ||
+    if (!request || !request->setter || caller != context_.modules.game.range.base + game_bindings(context_.modules.game.range).original_filter.filter_restore_caller_rva ||
         summary.manager != request->manager || summary.style != request->style || summary.id != request->id) return;
     if (!completed || request->working_done || request->working_busy) return;
     request->working_busy = true;

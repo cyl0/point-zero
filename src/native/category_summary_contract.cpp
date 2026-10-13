@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_summary_contract.hpp"
 
 #include <stdexcept>
@@ -6,28 +7,10 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin {
-    std::uint32_t begin, end;
-    RangeUse use{RangeUse::image_code};
-};
+using Pin = build_bindings::CategorySummaryContract::Pin;
 
-constexpr Pin pins[]{
-    {0x8704B0, 0x8706EC},
-    {0x5FDBD0, 0x5FDC68},
-    {0x5FC690, 0x5FC714},
-    {0x5F9B00, 0x5F9C1E},
-    {0x5F97A0, 0x5F97A4},
-    {0x5F97B0, 0x5F97B8},
-    {0x5FEF00, 0x5FEF05},
-    {0x5FEF30, 0x5FEF33},
-    {0x883280, 0x883288},
-    {0x885430, 0x885438},
-    {0x9771E0, 0x9771EF},
-    {0xB1BC50, 0xB1BC71},
-    // 870546 MOVDQA [RIP+4E2DD2h]: four int32 7 seeds; the last two are
-    // immediate 7s stored on the stack by the admitted calculation body.
-    {0xD53320, 0xD53330, RangeUse::image_read},
-};
+
+
 
 // Exact direct targets outside this finite category slice (their call-site
 // bindings are retained ABI evidence; transitive engine closure is not admitted):
@@ -65,15 +48,15 @@ CategorySummarySite admit_category_summary_contract(MemoryView memory, const Ima
     static_assert(sizeof(std::uintptr_t) == 8);
     // Keep the calculation snapshot for its entry/capture/cancel instruction
     // checks. Other bodies contribute only image extent/protection admission.
-    auto body = copy(memory, game.range, pins[0]);
-    for (std::size_t i = 1; i < std::size(pins); ++i) {
-        const auto pin = pins[i];
+    auto body = copy(memory, game.range, game_bindings(game.range).category_summary_contract.pins[0]);
+    for (std::size_t i = 1; i < std::size(game_bindings(game.range).category_summary_contract.pins); ++i) {
+        const auto pin = game_bindings(game.range).category_summary_contract.pins[i];
         const auto size = static_cast<std::size_t>(pin.end - pin.begin);
         require(pin.begin <= game.range.size && size <= game.range.size - pin.begin &&
                 readable_range(memory, game.range.base + pin.begin, size, pin.use, game.range),
                 "category summary support extent/protection changed");
     }
-    return {game.range.base + 0x8704B0, std::move(body),
-            game.range.base + 0x870517, game.range.base + 0x8706C7};
+    return {game.range.base + game_bindings(game.range).category_summary_contract.category_summary_rva, std::move(body),
+            game.range.base + game_bindings(game.range).category_summary_contract.summary_capture_rva, game.range.base + game_bindings(game.range).category_summary_contract.summary_continuation_rva};
 }
 } // namespace point_zero::native

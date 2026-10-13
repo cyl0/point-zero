@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "list_title_contract.hpp"
 
 #include <cstdio>
@@ -7,7 +8,8 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Pin = build_bindings::ListTitleContract::Pin;
+
 
 // Evidence: retained 03_bm2dx/binaries/LDJ-010-2026081900/bm2dx.dll,
 // inspected as PE data. Half-open ranges exclude following INT3 padding;
@@ -39,9 +41,9 @@ struct Pin { std::uint32_t rva, size; };
 // global constant must remain stock, read-only and non-executable.
 // Research references: candidate/source/src/list_ux_runtime.inl and
 // list_ux_native_pins.inl under research_v1_playlister51_20261001.
-constexpr Pin title{0x5F8AC0, 874};
-constexpr Pin background{0x5F7BF0, 997};
-constexpr std::uint32_t width_rva = 0xCAC1A8;
+
+
+
 constexpr std::uint32_t width_bits = 0x43FF0000;
 
 void require(bool ok, const char* why) { if (!ok) throw std::runtime_error(why); }
@@ -67,7 +69,7 @@ std::vector<std::byte> code(MemoryView memory, ImageRange image, Pin pin) {
 }
 
 std::uintptr_t width_address(MemoryView memory, ImageRange image) {
-    const auto at = address(memory, image, width_rva, sizeof(width_bits), RangeUse::image_read);
+    const auto at = address(memory, image, game_bindings(image).list_title_contract.width_rva, sizeof(width_bits), RangeUse::image_read);
     const auto end = at + sizeof(width_bits);
     // RangeUse::image_read permits writable images; this specific stock
     // constant does not. Check every region, including a split final byte.
@@ -95,11 +97,11 @@ void stock_width(MemoryView memory, ImageRange image) {
 } // namespace
 
 ListTitleSite admit_list_title_site(MemoryView memory, const ImageInfo& game) {
-    auto body = code(memory, game.range, title);
-    (void)code(memory, game.range, background);
+    auto body = code(memory, game.range, game_bindings(game.range).list_title_contract.title);
+    (void)code(memory, game.range, game_bindings(game.range).list_title_contract.background);
     stock_width(memory, game.range);
-    return {game.range.base + title.rva, std::move(body), game.range.base + 0x5F7E7A,
-            0x5F8DB8 - 0x5F8AC0};
+    return {game.range.base + game_bindings(game.range).list_title_contract.title.rva, std::move(body), game.range.base + game_bindings(game.range).list_title_contract.title_background_return_rva,
+            game_bindings(game.range).list_title_contract.title_width_end_rva - game_bindings(game.range).list_title_contract.title_entry_rva};
 }
 
 // Limits: observations are not atomic or a guarantee of future memory.

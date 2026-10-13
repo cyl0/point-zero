@@ -1,4 +1,5 @@
 #include "game_build.hpp"
+#include "build_bindings.hpp"
 
 #include <windows.h>
 #include <cstring>
@@ -85,14 +86,22 @@ GameBuildIdentity inspect_game_build(MemoryView memory, const ImageInfo& image) 
             nt.OptionalHeader.AddressOfEntryPoint, selected->guid, selected->age};
 }
 
+namespace {
+constexpr GameBuild builds[]{
+    {tested_2026081900, "2026081900", &august_bindings},
+    {tested_2026090900, "2026090900", &september_bindings},
+};
+}
 std::string_view supported_game_datecode(const GameBuildIdentity& identity) noexcept {
-    if (identity == tested_2026081900) return "2026081900";
-    if (identity == tested_2026090900) return "2026090900";
+    for (const auto& build : builds) if (build.identity == identity) return build.datecode;
     return {};
 }
+const GameBuild& select_game_build(MemoryView memory, const ImageInfo& image) {
+    const auto identity = inspect_game_build(memory, image);
+    for (const auto& build : builds) if (build.identity == identity) return build;
+    throw std::runtime_error("unsupported bm2dx build; no qualified binding profile");
+}
 std::string_view check_game_build(MemoryView memory, const ImageInfo& image) {
-    const auto datecode = supported_game_datecode(inspect_game_build(memory, image));
-    require(!datecode.empty(), "unsupported bm2dx build; POINT ZERO supports tested LDJ2026081900 and LDJ2026090900 only");
-    return datecode;
+    return select_game_build(memory, image).datecode;
 }
 } // namespace point_zero::native

@@ -165,10 +165,6 @@ static_assert(std::is_standard_layout_v<PZ_InitializeRequest> && std::is_trivial
 static_assert(std::is_standard_layout_v<PZ_NativeHost> && std::is_trivially_copyable_v<PZ_NativeHost>);
 } // namespace
 
-#ifdef POINT_ZERO_MULTI_BUILD_CORE
-extern "C" const PZ_CoreApi* PZ_CALL point_zero_get_api_august(uint32_t abi) noexcept {
-#else
 extern "C" __declspec(dllexport) const PZ_CoreApi* PZ_CALL point_zero_get_api(uint32_t abi) noexcept {
-#endif
     return abi == PZ_CORE_ABI ? &api : nullptr;
 }

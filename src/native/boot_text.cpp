@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "boot_text.hpp"
 
 #include <windows.h>
@@ -12,8 +13,8 @@ namespace {
 // Capture [93F629,93F63C) in boot draw [93F430,93F655), after OmniFix's
 // separate 93F5C4 capture. Displace only the nine-byte stack argument MOV;
 // the following footer CALL stays in native code with native unwind coverage.
-constexpr std::uint32_t renderer_rva = 0x5EB470;
-constexpr std::uint32_t capture_rva = 0x93F629;
+
+
 constexpr std::array capture{
     std::byte{0x48}, std::byte{0xC7}, std::byte{0x44}, std::byte{0x24}, std::byte{0x20},
     std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{0xE8},
@@ -24,9 +25,9 @@ void require(bool okay, const char* message) {
     if (!okay) throw std::runtime_error(message);
 }
 auto code(MemoryView memory, ImageRange image) {
-    require(capture_rva <= image.size && capture.size() <= image.size - capture_rva,
+    require(game_bindings(image).boot_text.capture_rva <= image.size && capture.size() <= image.size - game_bindings(image).boot_text.capture_rva,
             "boot text range outside selected game");
-    const auto at = image.base + capture_rva;
+    const auto at = image.base + game_bindings(image).boot_text.capture_rva;
     std::array<std::byte, capture.size()> bytes{};
     require(readable_range(memory, at, bytes.size(), RangeUse::image_code, image) &&
             read_bytes(memory, at, bytes) &&
@@ -45,12 +46,12 @@ BootText::BootText(MemoryView memory, ImageRange game, std::string version)
       version_(std::move(version)) {
     require(!version_.empty(), "boot text release version unavailable");
     require(game.base >= 0x10000 && contains(game.base, game.size, game.base, game.size) &&
-            renderer_rva <= game.size && 156 <= game.size - renderer_rva &&
-            readable_range(memory, game.base + renderer_rva, 156, RangeUse::image_code, game),
+            game_bindings(game).boot_text.renderer_rva <= game.size && 156 <= game.size - game_bindings(game).boot_text.renderer_rva &&
+            readable_range(memory, game.base + game_bindings(game).boot_text.renderer_rva, 156, RangeUse::image_code, game),
             "boot text renderer outside selected executable game image");
     const auto before = code(memory, game);
-    render_ = reinterpret_cast<Render>(game.base + renderer_rva);
-    patch_ = std::make_unique<detail::PlayedMidPatch>(memory, game.base + capture_rva, before, draw);
+    render_ = reinterpret_cast<Render>(game.base + game_bindings(game).boot_text.renderer_rva);
+    patch_ = std::make_unique<detail::PlayedMidPatch>(memory, game.base + game_bindings(game).boot_text.capture_rva, before, draw);
 }
 
 void BootText::arm() {

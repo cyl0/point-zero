@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "result_plate.hpp"
 
 #include <windows.h>
@@ -7,7 +8,7 @@ namespace point_zero::native {
 namespace {
 constexpr const char* labels[]{"left", "middle", "right"};
 constexpr std::uint32_t name_mask = 0x0C000000, named_bit = 0x04000000;
-constexpr std::uintptr_t layer_vtable = 0xDC86E0;
+
 
 void placement(int i, float extension, float (&xy)[2], float (&scale)[2]) noexcept {
     xy[0] = i == 0 ? -extension : (i == 1 ? 145.f - extension : 145.f);
@@ -49,9 +50,9 @@ bool ResultPlate::chart_live(const PlayedChart& chart) const {
     std::uint32_t stream{};
     return chart.surface == played_art::Surface::result && chart.owner == chart.layer &&
         chart.player >= 0 && chart.player <= 1 && chart.chart &&
-        calls_.chart.valid(5, chart.stream) >= 0 && layer_vtable <= UINTPTR_MAX - game_.base &&
-        contains(game_.base, game_.size, game_.base + layer_vtable, sizeof(vtable)) &&
-        read_field(memory_, chart.layer, 0, vtable) && vtable == game_.base + layer_vtable &&
+        calls_.chart.valid(5, chart.stream) >= 0 && game_bindings(game_).result_plate.layer_vtable <= UINTPTR_MAX - game_.base &&
+        contains(game_.base, game_.size, game_.base + game_bindings(game_).result_plate.layer_vtable, sizeof(vtable)) &&
+        read_field(memory_, chart.layer, 0, vtable) && vtable == game_.base + game_bindings(game_).result_plate.layer_vtable &&
         read_field(memory_, chart.layer, 8, stream) && stream == chart.stream;
 }
 bool ResultPlate::node(const Node& n, std::uint32_t stream, std::uintptr_t parent,

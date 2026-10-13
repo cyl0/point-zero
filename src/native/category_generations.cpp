@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "category_generations.hpp"
 #include "category_chart_match.hpp"
 
@@ -31,7 +32,7 @@ bool browsing_mode(int mode) noexcept { return mode == 0 || mode == 6; }
 bool read_scene_owner(MemoryView memory, ImageRange game, std::uintptr_t& manager,
                       std::uintptr_t& list, std::uintptr_t expected_manager = 0,
                       std::uintptr_t expected_list = 0) noexcept {
-    return read(memory, game.base + 0xAAB3B08, manager) &&
+    return read(memory, game.base + game_bindings(game).category_generations.category_manager_rva, manager) &&
         (!expected_manager || manager == expected_manager) && pointer(manager, 0x2A428) &&
         read(memory, manager + 0x175D0, list) &&
         (!expected_list || list == expected_list) && pointer(list, 0x88);
@@ -263,16 +264,16 @@ bool CategoryGenerations::tick_context(std::uintptr_t scene, Tick& out) {
     std::uintptr_t manager{}, list{}, vtable{}, target{}, callback{}, queued{};
     int adjustment{}, style{};
     std::uint8_t enabled{}, confirm{}, busy{}, editor{}, open{}, category_open{};
-    if (!read(context_.memory, scene, vtable) || vtable != game + 0xD84788 ||
+    if (!read(context_.memory, scene, vtable) || vtable != game + game_bindings(context_.modules.game.range).category_generations.scene_vtable_rva ||
         !read_scene_owner(context_.memory, context_.modules.game.range, manager, list, out.manager, out.list) ||
-        !read(context_.memory, list, vtable) || vtable != game + 0xD53278 ||
+        !read(context_.memory, list, vtable) || vtable != game + game_bindings(context_.modules.game.range).category_generations.list_vtable_rva ||
         !read_scene_styles(context_.memory, manager, list, out.style, style) ||
         out.style < 0 || out.style > 1 || style != out.style ||
-        !read(context_.memory, game + 0xACD79A4, out.dp) || out.dp != out.style ||
-        !read(context_.memory, game + 0xACD79B0, out.active) ||
+        !read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, out.dp) || out.dp != out.style ||
+        !read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, out.active) ||
         !read(context_.memory, scene + 0x90, out.controller) || !pointer(out.controller, 0x52) ||
         !read(context_.memory, out.controller, target) || target != scene ||
-        !read(context_.memory, out.controller + 8, callback) || callback != game + 0x8EE190 ||
+        !read(context_.memory, out.controller + 8, callback) || callback != game + game_bindings(context_.modules.game.range).category_generations.idle_callback_rva ||
         !read(context_.memory, out.controller + 0x10, adjustment) || adjustment ||
         !read(context_.memory, out.controller + 0x38, queued) || queued ||
         !read(context_.memory, out.controller + 0x51, enabled) || !enabled ||
@@ -533,7 +534,7 @@ bool CategoryGenerations::before_refresh(const CategoryLifeRequest& request) {
     refreshing_depth_ = depth_;
     refreshing_style_ = destination;
     if (!read(context_.memory, g.list + 0x84, refresh_.group) ||
-        !read(context_.memory, context_.modules.game.range.base + 0xACD79B0, refresh_.active)) return false;
+        !read(context_.memory, context_.modules.game.range.base + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, refresh_.active)) return false;
     refresh_.level = refresh_.group == 1;
     for (const auto active : refresh_.active) if (active < 0 || active > 1) return false;
     if ((!refresh_.active[0] && !refresh_.active[1]) || !refresh_context(old_style)) return false;
@@ -589,12 +590,12 @@ bool CategoryGenerations::refresh_context(int style) {
     std::array<int, 2> active{};
     const auto game = context_.modules.game.range.base;
     return read_scene_owner(context_.memory, context_.modules.game.range, manager, list, g.manager, g.list) &&
-        read(context_.memory, list, vtable) && vtable == game + 0xD53278 &&
+        read(context_.memory, list, vtable) && vtable == game + game_bindings(context_.modules.game.range).category_generations.list_vtable_rva &&
         read_scene_styles(context_.memory, manager, list, raw, normalized) &&
         raw == style && normalized == (style == 2 ? 0 : style) &&
         read(context_.memory, list + 0x84, group) && group == r.group &&
-        read(context_.memory, game + 0xACD79A4, dp) && dp == (refreshing_style_ != 0) &&
-        read(context_.memory, game + 0xACD79B0, active) && active == r.active;
+        read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, dp) && dp == (refreshing_style_ != 0) &&
+        read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, active) && active == r.active;
 }
 bool CategoryGenerations::before_style(const CategoryLifeRequest& request) {
     if (!request.style_boundary || !refresh_.generation) return true;
@@ -647,7 +648,7 @@ bool CategoryGenerations::invalidate_refresh_cache(std::uintptr_t scene) noexcep
     // tick to retry; it neither replays refresh here nor changes actual style.
     if (!pointer(scene, 0x2010)) return false;
     std::uintptr_t vtable{};
-    if (!read(context_.memory, scene, vtable) || vtable != context_.modules.game.range.base + 0xD84788 ||
+    if (!read(context_.memory, scene, vtable) || vtable != context_.modules.game.range.base + game_bindings(context_.modules.game.range).category_generations.scene_vtable_rva ||
         !readable_range(context_.memory, scene + 0x200C, sizeof(int), RangeUse::private_writable)) return false;
     const int invalid = -1; // Requested native style is always 0 or 1.
     __try {
@@ -660,7 +661,7 @@ bool CategoryGenerations::repair_style(Generation& g) {
     int style{}, normalized{};
     const auto view = context_.state.view();
     if (g.uncertain || current_ != &g || view.phase != FeaturePhase::ready ||
-        !read(context_.memory, context_.modules.game.range.base + 0xAAB3B08, manager) || manager != g.manager ||
+        !read(context_.memory, context_.modules.game.range.base + game_bindings(context_.modules.game.range).category_generations.category_manager_rva, manager) || manager != g.manager ||
         !read(context_.memory, g.manager + 0x175D0, list) || list != g.list ||
         !read(context_.memory, g.manager + 0x2A424, style) || style != g.repair_style ||
         !read(context_.memory, g.list + 0x78, normalized) || normalized != (style == 2 ? 0 : style)) return false;
@@ -786,12 +787,12 @@ bool CategoryGenerations::capture(Selection& out) {
     std::uint8_t busy{}, editor{};
     const auto game = context_.modules.game.range;
     if (!read_scene_owner(context_.memory, game, manager, list, out.manager, out.list) ||
-        !read(context_.memory, list, vtable) || vtable != game.base + 0xD53278 ||
+        !read(context_.memory, list, vtable) || vtable != game.base + game_bindings(context_.modules.game.range).category_generations.list_vtable_rva ||
         !read_scene_styles(context_.memory, manager, list, out.style, list_style) ||
         out.style < 0 || out.style > 1 || list_style != out.style ||
         !read(context_.memory, list + 0x84, out.group) || out.group < 0 ||
-        !read(context_.memory, game.base + 0xACD79A4, out.dp) || out.dp != out.style ||
-        !read(context_.memory, game.base + 0xACD79B0, out.active) ||
+        !read(context_.memory, game.base + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, out.dp) || out.dp != out.style ||
+        !read(context_.memory, game.base + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, out.active) ||
         !read(context_.memory, out.navigation + 5, out.open) || out.open > 1 ||
         !read(context_.memory, out.navigation + 6, busy) || busy) return false;
     for (const auto active : out.active) if (active < 0 || active > 1) return false;
@@ -859,7 +860,7 @@ bool CategoryGenerations::effective() const noexcept {
 }
 void CategoryGenerations::restore_working(const CategorySummaryRequest& request,
         std::uintptr_t caller, bool completed) {
-    if (!restoring_ || caller != context_.modules.game.range.base + 0x5FDB25) return;
+    if (!restoring_ || caller != context_.modules.game.range.base + game_bindings(context_.modules.game.range).category_generations.filter_restore_caller_rva) return;
     auto& before = *restoring_;
     if (!filtered(before.id) || request.manager != before.manager || request.style != before.style ||
         request.id != before.id) return;
@@ -1122,8 +1123,8 @@ bool CategoryGenerations::request_current(const Selection& before) {
     return read_scene_owner(memory, context_.modules.game.range, manager, list, before.manager, before.list) &&
         read_scene_styles(memory, manager, list, style, list_style) && style == before.style && list_style == style &&
         read(memory, list + 0x84, group) && group == before.group &&
-        read(memory, base + 0xACD79A4, dp) && dp == before.dp &&
-        read(memory, base + 0xACD79B0, active) && active == before.active &&
+        read(memory, base + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, dp) && dp == before.dp &&
+        read(memory, base + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, active) && active == before.active &&
         read(memory, before.navigation + 6, busy) && !busy && same_view(context_.state.view(), before.view);
 }
 bool CategoryGenerations::close_leaf(std::uintptr_t navigation, std::uintptr_t category) {

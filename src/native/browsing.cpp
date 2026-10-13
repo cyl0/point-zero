@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "browsing.hpp"
 #include "category_accessors_contract.hpp"
 #include "category_badges_contract.hpp"
@@ -56,18 +57,18 @@ Admission admit(const AdapterContext& context) {
     // These entry addresses are explicitly covered by the contracts above.
     // Call the game entry (including its admitted PL route), not a trampoline
     // that would bypass our private lookup/summary/restore routing.
-    calls.lookup = reinterpret_cast<decltype(calls.lookup)>(game.range.base + 0x86EE30);
+    calls.lookup = reinterpret_cast<decltype(calls.lookup)>(game.range.base + game_bindings(game.range).browsing.lookup_rva);
     calls.bank.calculate = reinterpret_cast<decltype(calls.bank.calculate)>(out.summary.address);
-    calls.bank.sort = reinterpret_cast<decltype(calls.bank.sort)>(game.range.base + 0x870D60);
-    calls.chart_difficulty = reinterpret_cast<decltype(calls.chart_difficulty)>(game.range.base + 0x5F9B00);
+    calls.bank.sort = reinterpret_cast<decltype(calls.bank.sort)>(game.range.base + game_bindings(game.range).browsing.bank_sort_rva);
+    calls.chart_difficulty = reinterpret_cast<decltype(calls.chart_difficulty)>(game.range.base + game_bindings(game.range).browsing.chart_difficulty_rva);
     // Complete lifecycle supporting bodies admit these native style/input calls.
-    calls.style = reinterpret_cast<decltype(calls.style)>(game.range.base + 0x949570);
-    calls.options = reinterpret_cast<decltype(calls.options)>(game.range.base + 0x8854A0);
-    calls.battle = reinterpret_cast<decltype(calls.battle)>(game.range.base + 0x897BB0);
-    calls.keypad = reinterpret_cast<decltype(calls.keypad)>(game.range.base + 0x800E70);
-    calls.modal = reinterpret_cast<decltype(calls.modal)>(game.range.base + 0x806F60);
-    calls.list_state = reinterpret_cast<decltype(calls.list_state)>(game.range.base + 0x7FB4B0);
-    calls.reset_list = reinterpret_cast<decltype(calls.reset_list)>(game.range.base + 0x7FB460);
+    calls.style = reinterpret_cast<decltype(calls.style)>(game.range.base + game_bindings(game.range).browsing.style_rva);
+    calls.options = reinterpret_cast<decltype(calls.options)>(game.range.base + game_bindings(game.range).browsing.options_rva);
+    calls.battle = reinterpret_cast<decltype(calls.battle)>(game.range.base + game_bindings(game.range).browsing.battle_rva);
+    calls.keypad = reinterpret_cast<decltype(calls.keypad)>(game.range.base + game_bindings(game.range).browsing.keypad_rva);
+    calls.modal = reinterpret_cast<decltype(calls.modal)>(game.range.base + game_bindings(game.range).browsing.modal_rva);
+    calls.list_state = reinterpret_cast<decltype(calls.list_state)>(game.range.base + game_bindings(game.range).browsing.list_state_rva);
+    calls.reset_list = reinterpret_cast<decltype(calls.reset_list)>(game.range.base + game_bindings(game.range).browsing.reset_list_rva);
     return out;
 }
 } // namespace

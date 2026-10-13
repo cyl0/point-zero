@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "played_chart.hpp"
 
 #include <windows.h>
@@ -7,14 +8,14 @@
 namespace point_zero::native {
 namespace {
 // Final-only bindings from retained played_context.inl/native_resource_bindings.
-constexpr std::uintptr_t active_flags = 0xACD79B0, dp_flag = 0xACD79A4;
-constexpr std::uintptr_t published_music = 0xACD79D0, published_difficulties = 0xACD79A8;
-constexpr std::uintptr_t layer_vtable = 0xDC86E0;
-constexpr std::uintptr_t decide_first = 0x601715, decide_second = 0x601749;
-constexpr std::uintptr_t hud_site = 0x9045FD, result_site = 0x91C56D;
-constexpr std::uintptr_t stepup_site = 0x601F4E, stepup_owner_offset = 0x518;
-constexpr std::uintptr_t stepup_vtable = 0xD818B8, stepup_callback = 0x8D9540;
-constexpr std::uintptr_t resource_slots = 0xB8B7E90;
+
+
+
+
+
+
+
+
 constexpr std::size_t resource_stride = 0x518, resource_count = 512;
 
 template<class T> bool global(MemoryView memory, ImageRange game,
@@ -29,8 +30,8 @@ struct Mode {
 };
 bool read_mode(MemoryView memory, ImageRange game, PlayedChartCalls calls, Mode& out) noexcept {
     out.style = calls.style();
-    if (!global(memory, game, active_flags, out.active) ||
-        !global(memory, game, dp_flag, out.dp) || out.dp < 0 || out.dp > 1) return false;
+    if (!global(memory, game, game_bindings(game).played_chart.active_flags, out.active) ||
+        !global(memory, game, game_bindings(game).played_chart.dp_flag, out.dp) || out.dp < 0 || out.dp > 1) return false;
     for (const int flag : out.active) if (flag < 0 || flag > 1) return false;
     out.sole = out.active[0] ? 0 : (out.active[1] ? 1 : -1);
     out.count = out.active[0] + out.active[1];
@@ -48,20 +49,20 @@ bool published(MemoryView memory, ImageRange game, const Observation& out) noexc
     std::uintptr_t music{};
     int difficulty{};
     return out.player >= 0 && out.player <= 1 &&
-        global(memory, game, published_music, music) && music == out.music &&
-        global(memory, game, published_difficulties + 4ULL * out.player, difficulty) &&
+        global(memory, game, game_bindings(game).played_chart.published_music, music) && music == out.music &&
+        global(memory, game, game_bindings(game).played_chart.published_difficulties + 4ULL * out.player, difficulty) &&
         difficulty == out.difficulty;
 }
 bool stepup(MemoryView memory, ImageRange game, const PlayedCapture& capture,
              const Mode& mode, Observation& out) noexcept {
-    if (stepup_callback > UINTPTR_MAX - game.base ||
-        !contains(game.base, game.size, game.base + stepup_callback, 1)) return false;
+    if (game_bindings(game).played_chart.stepup_callback > UINTPTR_MAX - game.base ||
+        !contains(game.base, game.size, game.base + game_bindings(game).played_chart.stepup_callback, 1)) return false;
     StepUpSource source;
     std::uintptr_t callback{};
     out.player = mode.sole;
     if (!read_stepup_source_identity(memory, game, capture.owner, source) ||
-        !read_field(memory, capture.owner - stepup_owner_offset, 0x98, callback) ||
-        callback != game.base + stepup_callback) return false;
+        !read_field(memory, capture.owner - game_bindings(game).played_chart.stepup_owner_offset, 0x98, callback) ||
+        callback != game.base + game_bindings(game).played_chart.stepup_callback) return false;
     out.resource = source.resource; out.package = source.package; out.layer = source.layer;
     return read_field(memory, capture.owner, 56, out.music) &&
         read_field(memory, capture.owner, 64, out.style) &&
@@ -106,9 +107,9 @@ bool observe(MemoryView memory, ImageRange game, const PlayedCapture& capture,
         out.difficulty < 0 || out.difficulty > 4 || out.level < 1 || out.level > 12 ||
         !read_field(memory, out.music, 0x67C, out.song) || out.song <= 0 ||
         !read_field(memory, out.layer, 0, out.vtable) ||
-        layer_vtable > UINTPTR_MAX - game.base ||
-        !contains(game.base, game.size, game.base + layer_vtable, sizeof(std::uintptr_t)) ||
-        out.vtable != game.base + layer_vtable ||
+        game_bindings(game).played_chart.layer_vtable > UINTPTR_MAX - game.base ||
+        !contains(game.base, game.size, game.base + game_bindings(game).played_chart.layer_vtable, sizeof(std::uintptr_t)) ||
+        out.vtable != game.base + game_bindings(game).played_chart.layer_vtable ||
         !read_field(memory, out.layer, 8, out.stream)) return false;
     return true;
 }
@@ -169,33 +170,32 @@ PlayedCaptureKind played_capture_kind(const PlayedCapture& capture, ImageRange g
         }
     }
     if (game.base < 0x10000 || !contains(game.base, game.size, capture.site, 1)) return unknown;
-    switch (capture.site - game.base) {
-    case decide_first: return confirmation_first;
-    case decide_second: return confirmation_second;
-    case hud_site: return hud;
-    case result_site: return result;
-    case stepup_site: return stepup;
-    default: return unknown;
-    }
+    const auto site = capture.site - game.base;
+    if (site == game_bindings(game).played_chart.decide_first) return confirmation_first;
+    if (site == game_bindings(game).played_chart.decide_second) return confirmation_second;
+    if (site == game_bindings(game).played_chart.hud_site) return hud;
+    if (site == game_bindings(game).played_chart.result_site) return result;
+    if (site == game_bindings(game).played_chart.stepup_site) return stepup;
+    return unknown;
 }
 
 bool read_stepup_source_identity(MemoryView memory, ImageRange game, std::uintptr_t owner,
                                  StepUpSource& out) noexcept {
     out = {};
     __try {
-        if (owner < 0x10000 + stepup_owner_offset ||
-            resource_slots > UINTPTR_MAX - game.base ||
-            !contains(game.base, game.size, game.base + resource_slots, resource_stride * resource_count) ||
-            stepup_vtable > UINTPTR_MAX - game.base ||
-            !contains(game.base, game.size, game.base + stepup_vtable, sizeof(std::uintptr_t))) return false;
+        if (owner < 0x10000 + game_bindings(game).played_chart.stepup_owner_offset ||
+            game_bindings(game).played_chart.resource_slots > UINTPTR_MAX - game.base ||
+            !contains(game.base, game.size, game.base + game_bindings(game).played_chart.resource_slots, resource_stride * resource_count) ||
+            game_bindings(game).played_chart.stepup_vtable > UINTPTR_MAX - game.base ||
+            !contains(game.base, game.size, game.base + game_bindings(game).played_chart.stepup_vtable, sizeof(std::uintptr_t))) return false;
         StepUpSource candidate;
         std::uintptr_t vtable{};
         int state{};
         constexpr char path[] = "/1/stepup.ifs";
         std::array<char, sizeof(path)> name{};
-        const auto first = game.base + resource_slots;
-        if (!read_field(memory, owner - stepup_owner_offset, 0, vtable) ||
-            vtable != game.base + stepup_vtable ||
+        const auto first = game.base + game_bindings(game).played_chart.resource_slots;
+        if (!read_field(memory, owner - game_bindings(game).played_chart.stepup_owner_offset, 0, vtable) ||
+            vtable != game.base + game_bindings(game).played_chart.stepup_vtable ||
             !read_field(memory, owner, 0, candidate.resource) ||
             !contains(first, resource_stride * resource_count, candidate.resource, resource_stride) ||
             (candidate.resource - first) % resource_stride != 0 ||

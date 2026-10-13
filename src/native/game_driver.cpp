@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "core/runtime.hpp"
 #include "adapters.hpp"
 #include "assets.hpp"
@@ -15,9 +16,6 @@
 #include <stdexcept>
 #include <utility>
 
-#ifndef POINT_ZERO_NATIVE_DATECODE
-#define POINT_ZERO_NATIVE_DATECODE "2026081900"
-#endif
 
 namespace point_zero::core {
 namespace {
@@ -46,8 +44,9 @@ public:
         // Pin already-loaded modules once. No polling, rating source read, or DLL
         // load is introduced here. Module hashes are not blanket vetoes.
         modules_.game = hold(L"bm2dx.dll");
-        const auto tested_datecode = check_game_build(memory_, modules_.game);
-        require(tested_datecode == POINT_ZERO_NATIVE_DATECODE, "native bindings do not match the selected game build");
+        const auto& build = select_game_build(memory_, modules_.game);
+        modules_.game.range.bindings = build.bindings;
+        const auto tested_datecode = build.datecode;
         const auto identity_note = std::string("tested_game_build=LDJ") + std::string(tested_datecode) +
             " reported_datecode=" + setup.host.avs.datecode;
         setup.host.log(setup.host.context, PZ_LOG_INFO,
@@ -65,7 +64,7 @@ public:
         initial_ = check_catalog_contract(memory_, modules_.game.range, range(modules_.omnifix));
         check_read();
         std::uint8_t graphics{};
-        require(read_value(memory_, modules_.game.range.base + 0xB2A9000, graphics) && graphics == 0,
+        require(read_value(memory_, modules_.game.range.base + game_bindings(modules_.game.range).game_driver.graphics_started_rva, graphics) && graphics == 0,
                 "game graphics startup already entered; late installation refused");
         if (!setup_.release_version.empty()) {
             try {
@@ -94,8 +93,8 @@ public:
         const auto base = modules_.game.range.base;
         std::uint8_t graphics{};
         std::uint32_t mutex{};
-        require(read_value(memory_, base + 0xB2A9000, graphics) && graphics == 1 &&
-                read_value(memory_, base + 0xB95B690, mutex) && mutex,
+        require(read_value(memory_, base + game_bindings(modules_.game.range).game_driver.graphics_started_rva, graphics) && graphics == 1 &&
+                read_value(memory_, base + game_bindings(modules_.game.range).game_driver.catalog_mutex_rva, mutex) && mutex,
                 "native graphics/resource boundary is not ready");
         return read_current_catalog(initial_.storage, initial_.getters);
     }

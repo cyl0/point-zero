@@ -1,32 +1,16 @@
+#include "build_bindings.hpp"
 #include "category_badges_contract.hpp"
 
 #include <stdexcept>
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t begin, end; };
+using Pin = build_bindings::CategoryBadgesContract::Pin;
+
 // Complete bodies, including every chained unwind fragment and all return
 // tails. No first-RET/16-byte approximation. The four predicate results are
 // AL (uint8_t); false paths can leave the upper return bits unspecified.
-constexpr Pin pins[]{
-    {0x885430,0x885438},
-    {0x885400,0x885408},
-    {0x5FC690,0x5FC714},
-    {0x5F97A0,0x5F97A4},
-    {0x894810,0x894868},
-    {0x894450,0x89449B},
-    {0x86FDF0,0x86FEF9},
-    {0x888C30,0x888C8C},
-    {0x5FEF00,0x5FEF05},
-    {0x5FEF30,0x5FEF33},
-    {0x9771E0,0x9771EF},
-    {0x883190,0x883198},
-    {0x85C590,0x85C5B7},
-    {0x888CA0,0x888D84},
-    {0x888D90,0x888DFC},
-    {0x86F720,0x86F744},
-    {0x86F990,0x86F99D},
-};
+
 
 // Native producer meaning/order: Weekly byte0, Recommend byte1, Shop byte2,
 // KAC byte3. 86E310 calls 8703D0 -> 870240 -> 870320 -> 870170 after population.
@@ -68,17 +52,17 @@ void check_range(MemoryView memory, ImageRange image, Pin pin) {
 CategoryBadgeCalls admit_category_badges_contract(MemoryView memory, const ImageInfo& game) {
     static_assert(sizeof(std::uintptr_t) == 8);
     require(memory.query, "category badges contract memory query missing");
-    for (const auto pin : pins) check_range(memory, game.range, pin);
+    for (const auto pin : game_bindings(game.range).category_badges_contract.pins) check_range(memory, game.range, pin);
     const auto base = game.range.base;
     return {
-        reinterpret_cast<decltype(CategoryBadgeCalls::music_owner)>(base + 0x885430),
-        reinterpret_cast<decltype(CategoryBadgeCalls::event_owner)>(base + 0x885400),
-        reinterpret_cast<decltype(CategoryBadgeCalls::chart_at)>(base + 0x5FC690),
-        reinterpret_cast<decltype(CategoryBadgeCalls::music_of)>(base + 0x5F97A0),
-        reinterpret_cast<decltype(CategoryBadgeCalls::weekly)>(base + 0x894810),
-        reinterpret_cast<decltype(CategoryBadgeCalls::recommend)>(base + 0x894450),
-        reinterpret_cast<decltype(CategoryBadgeCalls::shop)>(base + 0x86FDF0),
-        reinterpret_cast<decltype(CategoryBadgeCalls::kac)>(base + 0x888C30),
+        reinterpret_cast<decltype(CategoryBadgeCalls::music_owner)>(base + game_bindings(game.range).category_badges_contract.music_owner_rva),
+        reinterpret_cast<decltype(CategoryBadgeCalls::event_owner)>(base + game_bindings(game.range).category_badges_contract.event_owner_rva),
+        reinterpret_cast<decltype(CategoryBadgeCalls::chart_at)>(base + game_bindings(game.range).category_badges_contract.chart_at_rva),
+        reinterpret_cast<decltype(CategoryBadgeCalls::music_of)>(base + game_bindings(game.range).category_badges_contract.music_of_rva),
+        reinterpret_cast<decltype(CategoryBadgeCalls::weekly)>(base + game_bindings(game.range).category_badges_contract.weekly_rva),
+        reinterpret_cast<decltype(CategoryBadgeCalls::recommend)>(base + game_bindings(game.range).category_badges_contract.recommend_rva),
+        reinterpret_cast<decltype(CategoryBadgeCalls::shop)>(base + game_bindings(game.range).category_badges_contract.shop_rva),
+        reinterpret_cast<decltype(CategoryBadgeCalls::kac)>(base + game_bindings(game.range).category_badges_contract.kac_rva),
     };
 }
 } // namespace point_zero::native

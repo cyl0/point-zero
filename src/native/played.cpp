@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "played.hpp"
 
 #include <windows.h>
@@ -9,7 +10,7 @@
 namespace point_zero::native {
 namespace {
 constexpr const char* labels[]{"whole", "point", "fraction"};
-constexpr std::uintptr_t layer_vtable = 0xDC86E0;
+
 
 bool same_layout(const played_art::Plan& a, const played_art::Plan& b) noexcept {
     if (a.count != b.count || a.width != b.width ||
@@ -92,7 +93,7 @@ bool PlayedRenderer::owned(const Owner& owner) const {
     std::uintptr_t vtable{}; std::uint32_t stream{};
     if (owner.retired || !owner.mc || !owner.chart.leaf ||
         calls_.chart.valid(5, owner.chart.stream) < 0 || calls_.chart.valid(6, owner.mc) < 0 ||
-        !read_field(memory_, owner.chart.layer, 0, vtable) || vtable != game_.base + layer_vtable ||
+        !read_field(memory_, owner.chart.layer, 0, vtable) || vtable != game_.base + game_bindings(game_).played.layer_vtable ||
         !read_field(memory_, owner.chart.layer, 8, stream) || stream != owner.chart.stream) return false;
     const auto stepup = owner.chart.surface == played_art::Surface::stepup;
     const auto source_owned = [&] {

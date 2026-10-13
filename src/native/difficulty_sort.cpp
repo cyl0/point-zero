@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "difficulty_sort.hpp"
 
 #include <windows.h>
@@ -8,7 +9,7 @@
 namespace point_zero::native {
 namespace {
 using namespace category_layout;
-constexpr std::uintptr_t store_rva = 0xAAB3B08, list_vtable = 0xD53278;
+
 constexpr std::size_t native_categories = 230;
 template<class T> bool global(MemoryView memory, ImageRange game, std::size_t rva, T& out) noexcept {
     return rva <= game.size && sizeof(T) <= game.size - rva && rva <= UINTPTR_MAX - game.base &&
@@ -52,13 +53,13 @@ bool DifficultySort::observe(Context& out) const {
     int list_style{}, native_style{};
     // Ordinary scope only: 949530 can force bank0 through the native BATTLE
     // option even when DP is set. Do not rely only on a previously shared flag.
-    if (!global(m, game, store_rva, out.manager) || !read_field(m, out.manager, 0x175D0, out.list) ||
-        !read_field(m, out.list, 0, vt) || vt != game.base + list_vtable ||
+    if (!global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.store_rva, out.manager) || !read_field(m, out.manager, 0x175D0, out.list) ||
+        !read_field(m, out.list, 0, vt) || vt != game.base + game_bindings(context_.modules.game.range).difficulty_sort.list_vtable ||
         !read_field(m, out.manager, 0x2A424, out.style) || out.style < 0 || out.style > 1 ||
         !read_field(m, out.list, 0x78, list_style) || list_style != out.style ||
-        !global(m, game, 0xAAB36B0, native_style) || native_style != out.style ||
-        !global(m, game, 0x1077540, out.bars) || out.bars != 1 ||
-        !global(m, game, 0xACD79B0, out.active) || !global(m, game, 0xACD79A4, out.dp) ||
+        !global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.style_flag_rva, native_style) || native_style != out.style ||
+        !global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.visible_bars_rva, out.bars) || out.bars != 1 ||
+        !global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.active_flags_rva, out.active) || !global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.dp_flag_rva, out.dp) ||
         out.dp < 0 || out.dp > 1 || out.dp != out.style) return false;
     for (const auto value : out.active) if (value < 0 || value > 1) return false;
     out.players = out.active[0] + out.active[1];
@@ -88,7 +89,7 @@ bool DifficultySort::owns(const SortRequest& request, const Category& category, 
     }
     std::uintptr_t vt{};
     Vector categories;
-    if (!group || !read_field(memory, group, 0, vt) || vt != context_.modules.game.range.base + 0xCB6478 ||
+    if (!group || !read_field(memory, group, 0, vt) || vt != context_.modules.game.range.base + game_bindings(context_.modules.game.range).difficulty_sort.folder_group_vtable_rva ||
         !read_field(memory, group, 0x78 + 24ULL * context.style, categories) ||
         !vector_has(categories, 1, sizeof(std::uintptr_t), limit)) return false;
     unsigned matches{};
@@ -101,7 +102,7 @@ bool DifficultySort::owns(const SortRequest& request, const Category& category, 
 }
 bool DifficultySort::run(const SortRequest& request, NativeQSort original) {
     const auto game = context_.modules.game.range;
-    if (request.caller != game.base + 0x870F88 || request.compare != calls_.level ||
+    if (request.caller != game.base + game_bindings(context_.modules.game.range).difficulty_sort.sort_return_rva || request.compare != calls_.level ||
         request.width != sizeof(Bar) || !request.visible || request.count < 2 || request.count > limit) return false;
     Context context;
     Category category;

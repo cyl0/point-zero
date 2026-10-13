@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "result_notes.hpp"
 #include "result_plate.hpp"
 
@@ -9,7 +10,7 @@
 
 namespace point_zero::native {
 namespace {
-constexpr std::uintptr_t layer_vtable = 0xDC86E0;
+
 constexpr std::size_t sibling_limit = 128;
 
 bool close(float a, float b) noexcept {
@@ -34,8 +35,8 @@ bool ResultNotes::prepare() noexcept {
     attempted_ = true;
     if (state_.view().phase != FeaturePhase::preparing) return false;
     prepared_ = memory_.read &&
-        game_.base >= 0x10000 && layer_vtable <= UINTPTR_MAX - game_.base &&
-        contains(game_.base, game_.size, game_.base + layer_vtable, sizeof(std::uintptr_t)) &&
+        game_.base >= 0x10000 && game_bindings(game_).result_notes.layer_vtable <= UINTPTR_MAX - game_.base &&
+        contains(game_.base, game_.size, game_.base + game_bindings(game_).result_notes.layer_vtable, sizeof(std::uintptr_t)) &&
         afp_.base >= 0x10000 && 0xE1144 <= UINTPTR_MAX - afp_.base &&
         contains(afp_.base, afp_.size, afp_.base + 0xE1144, sizeof(std::uint64_t)) &&
         played_art::notes_roles().size() == 6;
@@ -84,7 +85,7 @@ bool ResultNotes::alive(const Owner& owner) {
     int root_handle{-1};
     return calls_.chart.valid(5, owner.stream) >= 0 &&
         calls_.chart.valid(6, owner.root) >= 0 && calls_.resolve(owner.root) == owner.root_work &&
-        read_field(memory_, owner.wrapper, 0, vtable) && vtable == game_.base + layer_vtable &&
+        read_field(memory_, owner.wrapper, 0, vtable) && vtable == game_.base + game_bindings(game_).result_notes.layer_vtable &&
         read_field(memory_, owner.wrapper, 8, stream) && stream == owner.stream &&
         calls_.chart.path(stream, "") == owner.root &&
         read_field(memory_, owner.root_work, 0, root_stream) && root_stream == stream &&
@@ -200,7 +201,7 @@ void ResultNotes::update_impl(std::uintptr_t wrapper) {
         if (!state_.view().enabled() || (offsets[0] == 0 && offsets[1] == 0)) return;
         std::uintptr_t vtable{};
         std::uint32_t stream{};
-        if (!read_field(memory_, wrapper, 0, vtable) || vtable != game_.base + layer_vtable ||
+        if (!read_field(memory_, wrapper, 0, vtable) || vtable != game_.base + game_bindings(game_).result_notes.layer_vtable ||
             !read_field(memory_, wrapper, 8, stream) || calls_.chart.valid(5, stream) < 0) return;
         for (const auto& candidate : owners_) if (candidate.wrapper && candidate.stream == stream) {
             fault(); return; // A live generation cannot silently acquire another wrapper.

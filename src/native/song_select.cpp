@@ -1,13 +1,12 @@
+#include "build_bindings.hpp"
 #include "song_select.hpp"
 
 namespace point_zero::native {
 namespace {
 // Reviewed final-datecode ownership from rating_context_bindings and the
 // native cup resolver. Group 7 has no supported chart-list owner.
-constexpr std::uintptr_t category_data = 0xAAB3B08, category_list = 0xD53278;
-constexpr std::array<std::uintptr_t, 12> groups{
-    0xCB6D88, 0xCB6B10, 0xCB70B0, 0xCB6BC0, 0xCB6C70, 0xCB6478,
-    0xCB63D0, 0, 0xCB69D0, 0xCB6E60, 0xCB6A90, 0xCB0700};
+
+
 
 bool image_address(ImageRange image, std::uintptr_t rva, std::uintptr_t& out) noexcept {
     if (rva > UINTPTR_MAX - image.base) return false;
@@ -21,11 +20,11 @@ bool has_vtable(MemoryView memory, ImageRange image, std::uintptr_t owner,
 }
 bool selected(MemoryView memory, ImageRange image, Selection& s) noexcept {
     std::uintptr_t root{};
-    if (!image_address(image, category_data, root) || !read_field(memory, root, 0, s.data) ||
-        !read_field(memory, s.data, 0x175D0, s.list) || !has_vtable(memory, image, s.list, category_list) ||
+    if (!image_address(image, game_bindings(image).song_select.category_data, root) || !read_field(memory, root, 0, s.data) ||
+        !read_field(memory, s.data, 0x175D0, s.list) || !has_vtable(memory, image, s.list, game_bindings(image).song_select.category_list) ||
         !read_field(memory, s.data, 0x2A424, s.style) || s.style < 0 || s.style > 1 ||
         !read_field(memory, s.list, 0x84, s.group_id) || s.group_id < 0 ||
-        s.group_id >= static_cast<int>(groups.size()) || !groups[s.group_id]) return false;
+        s.group_id >= static_cast<int>(game_bindings(image).song_select.groups.size()) || !game_bindings(image).song_select.groups[s.group_id]) return false;
 
     std::uintptr_t head{}, node{};
     if (!read_field(memory, s.list, 0x10, head) || !read_field(memory, head, 0, node)) return false;
@@ -35,7 +34,7 @@ bool selected(MemoryView memory, ImageRange image, Selection& s) noexcept {
         if (!read_field(memory, node, 0x10, id) || !read_field(memory, node, 0x18, group) ||
             !read_field(memory, node, 0, next)) return false;
         if (id == s.group_id) {
-            if (!has_vtable(memory, image, group, groups[s.group_id])) return false;
+            if (!has_vtable(memory, image, group, game_bindings(image).song_select.groups[s.group_id])) return false;
             s.group = group;
             break;
         }

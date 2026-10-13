@@ -1,3 +1,4 @@
+#include "build_bindings.hpp"
 #include "list_contract.hpp"
 #include "image_metadata.hpp"
 
@@ -5,7 +6,10 @@
 
 namespace point_zero::native {
 namespace {
-struct Pin { std::uint32_t rva, size; };
+using Binding = build_bindings::ListContract::Binding;
+using Import = build_bindings::ListContract::Import;
+using Pin = build_bindings::ListContract::Pin;
+
 struct Entry { std::uint16_t ordinal; Pin code; };
 
 // Retained LDJ-010-2026081900 DLLs, read as PE data. Complete per-function
@@ -13,19 +17,7 @@ struct Entry { std::uint16_t ordinal; Pin code; };
 // fragments end at 34B38D,34B398,34B569,34B5FF,34B62D,34B6A6,34B6B8:
 // its first return/root unwind fragment is NOT the complete function.
 // Leaf pins stop before padding/next function and include every return path.
-constexpr Pin game_code[]{
-    {0x949480, 55},
-    {0x949530, 57},
-    {0x949230, 42},
-    {0x34B360, 856},
-    {0x34C990, 186},
-    {0x34C240, 19},
-    {0x353A90, 82},
-    {0x34C0F0, 112},
-    {0x34C3B0, 156},
-    {0x34C450, 119},
-    {0x34C720, 27},
-};
+
 
 // Only exports called by ListNativeCalls or the selected emission wrappers;
 // unrelated cup path/attach/control/animation-info functions are not required.
@@ -75,28 +67,16 @@ constexpr Pin utils_helpers[]{
     {0xDA30, 236},
 };
 
-struct Binding { std::uint32_t slot, target; };
-constexpr Binding game_tables[]{
-    {0xE6C838, 0x34C240}, // visible, vtable +28
-    {0xE6C860, 0x34C3B0}, // emit's +50 matrix initialization
-    {0xE6C878, 0x34C450}, // emit's +68 pivot
-    {0xE6C898, 0x34C720}, // wrappers compare the +88 flag method
-    {0xE6C8E0, 0x34C990}, // emit's +D0 scale
-    {0xE6C900, 0x34CAD0}, // initializer compares +F0 before inlining it
-};
+
+
 constexpr Binding core_tables[]{
     {0xDD390 + 8 * 3,  0x228C0}, // property(1003)
     {0xDD390 + 8 * 6,  0x22970}, // property(1006)
     {0xDD390 + 8 * 27, 0x22B20}, // property(101B)
     {0xDD390 + 8 * 30, 0x22BA0}, // property(101E)
 };
-struct Import { std::uint32_t slot; std::uint16_t ordinal; };
-constexpr Import game_imports[]{
-    {0xC91B50,56}, {0xC91B88,106}, {0xC91BC8,116},
-    {0xC91C40,35}, {0xC91C48,37}, {0xC91C68,45},
-    {0xC91C80,47}, {0xC91C88,51}, {0xC91C90,49},
-    {0xC91C98,50}, {0xC91CA0,46}, {0xC91CB0,52}, {0xC91CB8,85},
-};
+
+
 
 void require(bool ok, const char* why) { if (!ok) throw std::runtime_error(why); }
 std::uintptr_t address(MemoryView memory, ImageRange image, std::size_t rva,
@@ -132,9 +112,9 @@ void table(MemoryView memory, ImageRange image, Binding binding) {
 void bindings(MemoryView memory, const NativeModules& modules) {
     for (const auto& entry : core_exports) exported(memory, modules.afp, entry);
     for (const auto& entry : utils_exports) exported(memory, modules.utils, entry);
-    for (const auto binding : game_tables) table(memory, modules.game.range, binding);
+    for (const auto binding : game_bindings(modules.game.range).list_contract.game_tables) table(memory, modules.game.range, binding);
     for (const auto binding : core_tables) table(memory, modules.afp.range, binding);
-    for (const auto binding : game_imports) {
+    for (const auto binding : game_bindings(modules.game.range).list_contract.game_imports) {
         const auto imported = inspect_import(memory, modules.game, binding.slot);
         const Entry* selected{};
         for (const auto& entry : core_exports)
@@ -159,28 +139,28 @@ void bindings(MemoryView memory, const NativeModules& modules) {
 // execute native code, load a DLL, or certify a future mutable-memory snapshot.
 ListNativeCalls admit_list_calls(MemoryView memory, const NativeModules& modules) {
     bindings(memory, modules);
-    for (const auto pin : game_code) code(memory, modules.game.range, pin);
+    for (const auto pin : game_bindings(modules.game.range).list_contract.game_code) code(memory, modules.game.range, pin);
     for (const auto& entry : core_exports) code(memory, modules.afp.range, entry.code);
     for (const auto& entry : utils_exports) code(memory, modules.utils.range, entry.code);
     for (const auto pin : core_helpers) code(memory, modules.afp.range, pin);
     for (const auto pin : utils_helpers) code(memory, modules.utils.range, pin);
     const auto g = modules.game.range.base, c = modules.afp.range.base, u = modules.utils.range.base;
     ListNativeCalls result;
-    result.chart.player_count = reinterpret_cast<decltype(result.chart.player_count)>(g + 0x949480);
-    result.chart.style = reinterpret_cast<decltype(result.chart.style)>(g + 0x949530);
-    result.chart.active_player = reinterpret_cast<decltype(result.chart.active_player)>(g + 0x949230);
+    result.chart.player_count = reinterpret_cast<decltype(result.chart.player_count)>(g + game_bindings(modules.game.range).list_contract.chart_player_count_rva);
+    result.chart.style = reinterpret_cast<decltype(result.chart.style)>(g + game_bindings(modules.game.range).list_contract.chart_style_rva);
+    result.chart.active_player = reinterpret_cast<decltype(result.chart.active_player)>(g + game_bindings(modules.game.range).list_contract.chart_active_player_rva);
     result.valid = reinterpret_cast<decltype(result.valid)>(c + 0x37B0);
     result.package = reinterpret_cast<decltype(result.package)>(u + 0xB980);
     result.image_info = reinterpret_cast<decltype(result.image_info)>(u + 0xDC10);
     result.arguments = reinterpret_cast<decltype(result.arguments)>(u + 0xDCD0);
     result.creation_level = reinterpret_cast<decltype(result.creation_level)>(c + 0x4450);
     result.set_creation_level = reinterpret_cast<decltype(result.set_creation_level)>(c + 0x4410);
-    result.emit = reinterpret_cast<decltype(result.emit)>(g + 0x34B360);
+    result.emit = reinterpret_cast<decltype(result.emit)>(g + game_bindings(modules.game.range).list_contract.emit_rva);
     // 34C240 consumes DL (use 0/1), passes stream,[mask=1],value, then
     // tail-jumps via C91B50 to core ordinal 56 / XCd229cc000037 / C5B0.
     // EAX is preserved: C5B0 returns 0 after A770, or -3 on lookup failure.
     // The retained probe discarded that result; the typed int is intentional.
-    result.visible = reinterpret_cast<decltype(result.visible)>(g + 0x34C240);
+    result.visible = reinterpret_cast<decltype(result.visible)>(g + game_bindings(modules.game.range).list_contract.visible_rva);
     return result;
 }
 } // namespace point_zero::native
