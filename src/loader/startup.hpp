@@ -29,6 +29,8 @@ struct StartupOptions {
     // Local running-game evidence, supplied by the SDK owner after native_host.
     // Absent in generic contract hosts, which retain their installed major.
     std::function<std::uint32_t()> game_major;
+    // Handoffs must detect again; only the initial updater may recover.
+    bool recover_detection{};
 };
 
 // Entry thread owns preparation through initialize_prepared. A single worker

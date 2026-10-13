@@ -54,6 +54,7 @@ struct State {
             [this, runtime = std::filesystem::path(request.runtime), settings,
              skip = request.skip_update, offer = std::string(request.offer)]
             (const Release& installed, Channel channel, const Stop& stop) {
+                if (!game_major) game_major = installed.major;
                 Files files(runtime / L"point-zero", &stop.flag());
                 if (skip) {
                     if (offer.empty()) return std::optional<std::string>{};
@@ -141,7 +142,16 @@ struct State {
                 std::memcpy(reply.generation, chosen.release.id.c_str(), sizeof(reply.generation));
                 reply.offered = offered;
                 return true;
-            }, [this] { return game_major; }}) {}
+            }, [this] { return detect_major(); }, request.skip_update == 0}) {}
+    std::uint32_t detect_major() {
+#ifdef POINT_ZERO_TEST_LOADER
+        game_major = music_database_major(FilePin(runtime / L"game-major.bin").read_prefix(8));
+#else
+        game_major = detect_game_major(runtime);
+#endif
+        log("detected_iidx_major=" + std::to_string(game_major));
+        return game_major;
+    }
     PZ_NativeHost native_host() {
         // Poison the output so success without filling/terminating it cannot
         // accidentally pass validation because of caller-provided zeroes.
@@ -152,14 +162,6 @@ struct State {
         if (!info.model[0] || !std::memchr(info.model, '\0', sizeof(info.model)) ||
             !info.ext[0] || !std::memchr(info.ext, '\0', sizeof(info.ext)))
             throw std::runtime_error("Spice SDK AVS metadata malformed");
-#ifdef POINT_ZERO_TEST_LOADER
-        // Private HTTP/SDK fixtures supply the same binary database header,
-        // without loading a real game image into the test process.
-        game_major = music_database_major(FilePin(runtime / L"game-major.bin").read_prefix(8));
-#else
-        game_major = detect_game_major(runtime);
-#endif
-        log("detected_iidx_major=" + std::to_string(game_major));
         PZ_NativeHost result{};
         static_assert(sizeof(result.avs.model) == sizeof(info.model));
         static_assert(sizeof(result.avs.datecode) == sizeof(info.ext));

@@ -228,8 +228,19 @@ struct Startup::Impl : std::enable_shared_from_this<Impl> {
         // unavailable. No new config/update/activation work precedes this fetch.
         check_stop();
         const auto host = options.native_host();
-        const auto game_major = options.game_major ? options.game_major() : transaction->selected().release.major;
-        require(game_major > 0 && game_major <= 999, "invalid detected game major");
+        std::uint32_t game_major{};
+        bool recovering_detection = false;
+        try {
+            game_major = options.game_major ? options.game_major() : transaction->selected().release.major;
+            require(game_major > 0 && game_major <= 999, "invalid detected game major");
+        } catch (const std::exception& e) {
+            check_stop();
+            if (!options.recover_detection) throw;
+            note(e.what());
+            game_major = transaction->selected().release.major;
+            recovering_detection = true;
+            note("detection_recovery_major=" + std::to_string(game_major));
+        }
         check_stop();
         const auto config_path = utf8(options.runtime / L"point-zero.conf");
         // Keep the small early config snapshot pinned until core preparation has
@@ -243,6 +254,11 @@ struct Startup::Impl : std::enable_shared_from_this<Impl> {
             check_stop();
             if (id) offered = transaction->offer(*id, requested, game_major);
         } catch (const std::exception& e) { check_stop(); note(e.what()); note("update_retained_installed"); }
+        if (recovering_detection) {
+            require(offered, "game detection failed; no newer recovery package available");
+            require(handoff(true), "game detection failed; recovery requires a replacement updater");
+            return updater_handoff;
+        }
         require(transaction->selected().release.major == game_major,
                 "POINT ZERO has no available release for the detected IIDX major");
         if (handoff(offered)) return updater_handoff;
