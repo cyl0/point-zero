@@ -12,7 +12,7 @@ struct FilterContract {
 
 // Finite, read-only LDJ-010-2026081900 admission. Requires a structurally
 // inspected, retained game image AND GameDriver's catalogue admission (which
-// owns 951E80 and its supported Omni dependencies). Calls no native function.
+// owns the selected catalogue getter). Calls no native function.
 // Throws on changed selected bodies/bindings, range, allocation or permissions.
 // Map ownership, captured category/style, live values and hook lifetime remain
 // the reader/hook's responsibility. Returned snapshots own their bytes.

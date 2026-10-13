@@ -1,5 +1,6 @@
 #include "list_hook.hpp"
-#include "inline_patch.hpp"
+#include "call_patch.hpp"
+#include <memory>
 
 #include <windows.h>
 #include <atomic>
@@ -35,7 +36,7 @@ struct ListHook::State {
     enum class Phase { disabled, enabling, armed, failed };
     static std::atomic<bool> reserved;
     static std::atomic<State*> live;
-    detail::InlinePatch patch;
+    std::array<std::unique_ptr<detail::CallPatch>, 4> patches;
     Draw original;
     void* const context;
     const Callback callback;
@@ -46,11 +47,15 @@ struct ListHook::State {
     bool retained{};
 
     State(MemoryView view, const ListHookSite& site, void* opaque, Callback call)
-        : patch(view, site.address, site.body,
-              reinterpret_cast<std::uintptr_t>(&pz_list_draw_entry)),
-          original(reinterpret_cast<Draw>(patch.original())), context(opaque), callback(call), callers(site.callers) {}
+        : original(reinterpret_cast<Draw>(site.address)), context(opaque), callback(call), callers(site.callers) {
+        for (std::size_t i = 0; i < patches.size(); ++i)
+            patches[i] = std::make_unique<detail::CallPatch>(view, callers[i] - 5, site.address,
+                reinterpret_cast<std::uintptr_t>(&pz_list_draw_entry));
+    }
     bool intact() const noexcept {
-        return phase.load(std::memory_order_acquire) == Phase::armed && patch.intact();
+        if (phase.load(std::memory_order_acquire) != Phase::armed) return false;
+        for (const auto& patch : patches) if (!patch->intact()) return false;
+        return true;
     }
     bool enter(std::uintptr_t return_address) noexcept {
         if (return_address != callers[0] && return_address != callers[1] &&
@@ -105,9 +110,13 @@ ListHook::ListHook(MemoryView memory, const ListHookSite& site, void* context, C
     bool available = false;
     require(State::reserved.compare_exchange_strong(available, true), "list hook process slot already reserved");
     try {
-        require(memory.read && memory.query && callback && !site.body.empty() &&
-                site.body.size() <= UINTPTR_MAX - site.address, "list hook arguments missing or invalid");
-        for (const auto caller : site.callers) require(caller >= 0x10000, "list hook caller is absent");
+        require(memory.read && memory.query && callback && site.address >= 0x10000, "list hook arguments missing or invalid");
+        for (std::size_t i = 0; i < site.callers.size(); ++i) {
+            require(site.callers[i] >= 0x10005, "list hook caller is absent");
+            for (std::size_t j = 0; j < i; ++j)
+                require(site.callers[i] + 5 <= site.callers[j] || site.callers[j] + 5 <= site.callers[i],
+                        "list hook callers overlap");
+        }
         state_ = new State(memory, site, context, callback);
     } catch (...) {
         State::reserved.store(false, std::memory_order_release);
@@ -127,15 +136,17 @@ void ListHook::arm() {
             "list hook arm already attempted");
     self.phase.store(State::Phase::failed, std::memory_order_release);
     require(!(self.users.load(std::memory_order_acquire) & 1), "list callback already retired");
-    require(self.patch.before_intact(), "list hook changed before arm");
+    for (const auto& patch : self.patches)
+        require(patch->before_intact(), "list hook changed before arm");
     self.thread = GetCurrentThreadId();
     self.phase.store(State::Phase::enabling, std::memory_order_release);
     self.retained = true;
     pz_list_draw_dispatch = &State::draw;
     State::live.store(&self, std::memory_order_release);
     try {
-        self.patch.enable();
-        require(self.patch.intact(), "list hook changed during arm");
+        for (auto& patch : self.patches) patch->enable();
+        for (const auto& patch : self.patches)
+            require(patch->intact(), "list hook changed during arm");
         self.phase.store(State::Phase::armed, std::memory_order_release);
     } catch (...) {
         self.retire();

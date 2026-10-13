@@ -4,8 +4,6 @@
 #include "image.hpp"
 
 namespace point_zero::native {
-// Finite LDJ-010-2026081900 shared named-image entry and four list callers.
-// Read-only admission; returns an owned copy of the verified displaced emitter prefix.
-// No module loading, native calls, hook installation or title-hook admission.
+// Read-only admission of the four selected game CALL sites.
 ListHookSite admit_list_hook_site(MemoryView, const ImageInfo& game);
 } // namespace point_zero::native

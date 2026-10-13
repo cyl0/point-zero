@@ -2,18 +2,16 @@
 
 #include "memory.hpp"
 #include <array>
-#include <vector>
 
 namespace point_zero::native {
 struct ListHookSite {
     std::uintptr_t address{};
-    std::vector<std::byte> body; // Complete expected displaced emitter instructions.
     // Exact return addresses for background, paired P1/P2 and solo badge calls.
-    // Other shared-image calls forward without copying a name or using context.
+    // Other shared-image calls remain untouched.
     std::array<std::uintptr_t, 4> callers{};
 };
 
-// The shared named-image entry. The selected row owner is carried in the
+// Four list CALLs to the shared named-image entry. The selected row owner is carried in the
 // caller's RSI, outside the Win64 argument list. A compiled ABI shim captures
 // that register and the native return address before a C++ prologue can use it.
 // Native callers still use the unchanged seven-argument Draw signature.

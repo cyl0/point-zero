@@ -79,10 +79,6 @@ FilterContract admit_filter_contract(MemoryView memory, const ImageInfo& game) {
     return result;
 }
 
-// 951E80 -> 951FD0/951E40 is already admitted by GameDriver's
-// check_catalog_contract, including the proven Omni LEA->MOV replacements,
-// catalogue allocation and index provenance. A stock-only pin here would
-// incorrectly reject that supported path; this API does not admit it anew.
 // Factory bytes prove allocation size 28h, control vtable CC1540, object at
 // control+10h with vtable CC1490, and shared-pair publication. No factory call,
 // ownership operation or vtable mutation is performed by this contract.

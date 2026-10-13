@@ -23,9 +23,6 @@ using namespace native;
 void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
-ImageRange range(const std::optional<ImageInfo>& image) noexcept {
-    return image ? image->range : ImageRange{};
-}
 class GameDriver final : public NativeDriver {
 public:
     GameDriver(const NativeSetup& setup, FeatureState& state) : setup_(setup), state_(state) {
@@ -54,14 +51,13 @@ public:
         modules_.avs = hold(L"avs2-core.dll");
         modules_.afp = hold(L"afp-core.dll");
         modules_.utils = hold(L"afp-utils.dll");
-        modules_.omnifix = optional(L"omnifix.dll");
         modules_.playlister = optional(L"playlister.dll");
         modules_.fervidex = optional(L"fervidex.dll");
     }
 
     void install(Observer observer, void* context) override {
         require(!hook_ && observer, "catalogue startup installation already attempted or invalid");
-        initial_ = check_catalog_contract(memory_, modules_.game.range, range(modules_.omnifix));
+        initial_ = check_catalog_contract(memory_, modules_.game.range);
         check_read();
         std::uint8_t graphics{};
         require(read_value(memory_, modules_.game.range.base + game_bindings(modules_.game.range).game_driver.graphics_started_rva, graphics) && graphics == 0,
@@ -96,7 +92,7 @@ public:
         require(read_value(memory_, base + game_bindings(modules_.game.range).game_driver.graphics_started_rva, graphics) && graphics == 1 &&
                 read_value(memory_, base + game_bindings(modules_.game.range).game_driver.catalog_mutex_rva, mutex) && mutex,
                 "native graphics/resource boundary is not ready");
-        return read_current_catalog(initial_.storage, initial_.getters);
+        return read_current_catalog(initial_.getters);
     }
 
     void activate(const Catalog& catalog) override {

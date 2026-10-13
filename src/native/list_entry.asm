@@ -1,4 +1,4 @@
-; Win64 ABI adapter for the selected shared image-emitter entry. Do not inspect
+; Win64 ABI adapter for the selected image-emitter CALLs. Do not inspect
 ; RSI from a C++ function: its prologue may already have claimed that register.
 ; No native register/state snapshot or runtime-generated callback stub is needed.
 OPTION CASEMAP:NONE

@@ -62,7 +62,8 @@ add_library(point_zero_native_list_entry OBJECT src/native/list_entry.asm)
 add_library(point_zero_native_sort_entry OBJECT src/native/sort_entry.asm)
 add_library(point_zero_native_filter_entry OBJECT src/native/filter_entry.asm)
 add_library(point_zero_native_hook STATIC src/native/catalog_hook.cpp
-    src/native/inline_patch.cpp src/native/surface_hooks.cpp src/native/list_hook.cpp
+    src/native/inline_patch.cpp
+    src/native/call_patch.cpp src/native/surface_hooks.cpp src/native/list_hook.cpp
     src/native/title_limit_patch.cpp src/native/list_title_hook.cpp
     src/native/played_mid_patch.cpp src/native/played_hooks.cpp src/native/sort_hook.cpp src/native/filter_hooks.cpp
     $<TARGET_OBJECTS:point_zero_native_list_entry>

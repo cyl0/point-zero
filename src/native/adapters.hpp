@@ -11,7 +11,7 @@
 namespace point_zero::native {
 struct NativeModules {
     ImageInfo game, avs, afp, utils;
-    std::optional<ImageInfo> omnifix, playlister, fervidex;
+    std::optional<ImageInfo> playlister, fervidex;
 };
 struct AdapterContext {
     const NativeModules& modules;

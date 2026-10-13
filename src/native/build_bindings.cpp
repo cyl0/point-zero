@@ -37,11 +37,6 @@ const GameBindings september_bindings = [] {
     result.browsing.modal_rva = 0x805ca0;
     result.browsing.list_state_rva = 0x7fa1f0;
     result.browsing.reset_list_rva = 0x7fa1a0;
-    result.catalog_contract.header_rva = 0xacd6900;
-    result.catalog_contract.index_rva = 0xacd6910;
-    result.catalog_contract.read_rva = 0x9519c7;
-    result.catalog_contract.import_rva = 0xc8fd88;
-    result.catalog_contract.return_rva = 0x9519cd;
     result.catalog_contract.pins = {
     build_bindings::CatalogContract::Pin{0x950b50,47},
     build_bindings::CatalogContract::Pin{0x950b80,61},
@@ -56,12 +51,6 @@ const GameBindings september_bindings = [] {
     build_bindings::CatalogContract::Pin{0x951960,214},
     build_bindings::CatalogContract::Pin{0x951af0,31}
 };
-    result.catalog_contract.omni_header_patch_1_rva = 0x950b68;
-    result.catalog_contract.omni_header_patch_2_rva = 0x950ba5;
-    result.catalog_contract.omni_header_patch_3_rva = 0x950bd8;
-    result.catalog_contract.omni_index_patch_rva = 0x950d11;
-    result.catalog_contract.capacity_immediate_rva = 0x9519ab;
-    result.catalog_contract.capacity_branch_rva = 0x951a04;
     result.catalog_contract.catalog_getters_rva = 0x950d10;
     result.catalog_contract.catalog_load_rva = 0x951960;
     result.category_accessors_contract.pins = {{
@@ -506,7 +495,6 @@ const GameBindings september_bindings = [] {
     result.stepup_contract.named_return_rva = 0x600c9b;
     result.surface_contract.cup = {0x5fef10, 1467};
     result.surface_contract.bitmap_import = 0xc8fbd8;
-    result.catalog_contract.read_call = {std::byte{0xff},std::byte{0x15},std::byte{0xbb},std::byte{0xe3},std::byte{0x33},std::byte{0}};
     result.captures.confirmation[5] = std::byte{0xbf};
     result.captures.stepup[5] = std::byte{0xc2};
     return result;

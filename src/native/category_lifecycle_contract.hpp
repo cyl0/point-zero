@@ -7,18 +7,18 @@
 namespace point_zero::native {
 // Finite, read-only LDJ-010-2026081900 / official PL5.1.0 admission. Throws
 // on refusal. Inspected images must be retained. Returns
-// thirteen complete copied bodies for InlinePatch in CategoryLifeEvent order:
+// thirteen bodies in CategoryLifeEvent order (initialize uses its selected CALL):
 // adopt86FFF0, populate638A70 (or PL+3FEE0), list_destroy639A30, group_destroy611B80,
-// initialize603EE0 (or PL+40C60), graph_bind687E20, selection_destroy8EA7E0,
+// initialize603EE0, graph_bind687E20, selection_destroy8EA7E0,
 // scene_entry8EB050, scene_tick8EC1F0, scene_refresh8EC750, preview_assign800C70,
 // selection_restore607F30, style_apply607D80,
 // plus required initialize_caller=game+60717B, scene_refresh_caller=game+8EC3D1,
 // preview_caller=game+608A7A, restore_caller=game+8EB6F0,
 // style_apply_caller=game+8EC7C1 and style_restore_caller=game+8EC7EF.
-// The PL route returns its real callback entry, so before/after encloses BOTH
+// Populate returns the PL callback entry, so before/after encloses BOTH
 // native population and PL appending. RCX remains group; preserve native RAX.
 // Proves the official incoming route and saved native original, never bypasses it.
-// Initialize encloses PL's reset before native navigation/population setup and
+// The initializer CALL encloses the shared game entry and its existing hooks; it
 // preserves RCX=navigation, EDX=selector and RAX. Only caller607176 is observed;
 // caller7FC05B (StepUp-like navigation+258h) continues natively without an observer.
 // After original returns, population86E310, style86EC40, working preferences and
@@ -79,7 +79,7 @@ namespace point_zero::native {
 // Support86EC40 also admits official PL hk_close_categories40DA0..40E5E,
 // objectFE480, saved originalFE4A0: native call40DF2 precedes PL's open/cursor
 // reset, preserving native RAX. E9 steals5/T24; FF steals15/T29 with byte14 NOP.
-// The same finite forwarding checks apply independently to all three PL routes.
+// The same finite forwarding checks apply to both remaining PL routes.
 // No extra lifecycle event is installed at the support entry or PL callback.
 // Offline current-group routing:605810 writes the active group's style cursor,
 // not list+84. Earlier86EC40's ordinary list style virtual may replace list+84

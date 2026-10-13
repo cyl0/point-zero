@@ -52,13 +52,7 @@ struct Browsing {
     std::uint32_t reset_list_rva = 0x7FB460;
 };
 struct CatalogContract {
-    std::array<std::byte, 6> read_call{std::byte{0xff},std::byte{0x15},std::byte{0xfb},std::byte{0xf0},std::byte{0x33},std::byte{0}};
 struct Pin { std::uintptr_t rva; std::size_t size; };
-    std::uint32_t header_rva = 0xacd8900;
-    std::uint32_t index_rva = 0xacd8910;
-    std::uint32_t read_rva = 0x952c87;
-    std::uint32_t import_rva = 0xc91d88;
-    std::uint32_t return_rva = 0x952c8d;
     std::array<Pin, 12> pins{
     Pin{0x951e10,47},
     Pin{0x951e40,61},
@@ -73,12 +67,6 @@ struct Pin { std::uintptr_t rva; std::size_t size; };
     Pin{0x952c20,214},
     Pin{0x952db0,31}
 };
-    std::uint32_t omni_header_patch_1_rva = 0x951e28;
-    std::uint32_t omni_header_patch_2_rva = 0x951e65;
-    std::uint32_t omni_header_patch_3_rva = 0x951e98;
-    std::uint32_t omni_index_patch_rva = 0x951fd1;
-    std::uint32_t capacity_immediate_rva = 0x952c6b;
-    std::uint32_t capacity_branch_rva = 0x952cc4;
     std::uint32_t catalog_getters_rva = 0x951fd0;
     std::uint32_t catalog_load_rva = 0x952c20;
 };

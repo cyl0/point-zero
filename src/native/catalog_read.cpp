@@ -28,12 +28,11 @@ bool native_header(void* context, std::uintptr_t& result) noexcept {
 } // namespace
 
 CapturedCatalog read_catalog(const CatalogAccess& access) {
-    const auto [address, capacity] = access.storage;
+    constexpr std::size_t snapshot_limit = 16 * 1024 * 1024;
+    std::uintptr_t address{};
     require(access.memory.read && access.header, "incomplete catalogue access");
-    require(address >= 0x10000 && (capacity == 0x400000 || capacity == 0x600000) &&
-            capacity <= UINTPTR_MAX - address, "unadmitted catalogue storage");
-    std::uintptr_t observed{};
-    require(access.header(access.header_context, observed) && observed == address, "catalogue header owner disagreement");
+    require(access.header(access.header_context, address), "catalogue header getter failed");
+    require(address >= 0x10000 && snapshot_limit <= UINTPTR_MAX - address, "invalid catalogue storage");
     std::array<std::byte, header_size> header{};
     require(access.memory.read(access.memory.context, address, header), "catalogue header unavailable");
     require(value<std::uint32_t>(header, 0) == 0x58444949 && value<std::uint32_t>(header, 4) == 33,
@@ -42,12 +41,15 @@ CapturedCatalog read_catalog(const CatalogAccess& access) {
     const auto id_limit = value<std::uint32_t>(header, 12);
     require(records && id_limit > 1 && id_limit <= 100000, "catalogue count or ID limit invalid");
     const auto records_offset = header_size + 4ULL * id_limit;
-    require(records_offset <= capacity && records <= (capacity - records_offset) / record_size,
-            "catalogue exceeds admitted allocation");
+    require(records_offset <= snapshot_limit && records <= (snapshot_limit - records_offset) / record_size,
+            "catalogue exceeds snapshot limit");
     const auto size = static_cast<std::size_t>(records_offset + record_size * records);
     std::vector<std::byte> snapshot(size);
     require(access.memory.read(access.memory.context, address, snapshot) &&
             std::memcmp(snapshot.data(), header.data(), header.size()) == 0, "catalogue changed during capture");
+    std::uintptr_t observed{};
+    require(access.header(access.header_context, observed) && observed == address,
+            "catalogue header moved during capture");
     CapturedCatalog result;
     std::vector<bool> seen(id_limit);
     result.charts.reserve(static_cast<std::size_t>(records) * 10);
@@ -67,7 +69,7 @@ CapturedCatalog read_catalog(const CatalogAccess& access) {
     return result;
 }
 
-CapturedCatalog read_current_catalog(CatalogStorage storage, CatalogGetters getters) {
-    return read_catalog({storage, current_process_memory(), &getters, native_header});
+CapturedCatalog read_current_catalog(CatalogGetters getters) {
+    return read_catalog({current_process_memory(), &getters, native_header});
 }
 } // namespace point_zero::native

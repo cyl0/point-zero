@@ -123,19 +123,6 @@ using Pin = build_bindings::CategoryLifecycleContract::Pin;
 constexpr Pin pl_populate{0x3FEE0, 0x40750};
 constexpr std::array<unsigned char, 14> populate_original{
     0x48,0x89,0x5C,0x24,0x10,0x48,0x89,0x6C,0x24,0x18,0x56,0x57,0x41,0x54};
-// PL also hooks603EE0, discovered by signature at603EEB. Installer42161 calls
-// 42650;4265D binds40C60;42169 stores hook objectFE690. Callback40C60..40D96,
-// UW F80DC v1 flags2, no chains/DIR64. It initializes each category via100828,
-// clears playlist inserted and chart_count, THEN calls saved originalFE6B0 at
-// 40D4A with unchanged navigation/selector; RAX survives mutex release. Hooking
-// the callback preserves both resets and original game return address60717B.
-// Fields FE690/+8, FE6B0/+8, FE6D8 mirror populate; mutexFE6E0 remains external.
-// E9 steals5, T24. FF steals15 (5+5+1+4), incoming byte14 MUST be NOP, T29:
-// original[15], FF25+game+15. Populate remains stolen14/T28. Native prefixes are
-// nonrelative. These event routes and the supporting close route are independent.
-constexpr Pin pl_initialize{0x40C60, 0x40D96};
-constexpr std::array<unsigned char, 15> initialize_original{
-    0x48,0x89,0x5C,0x24,0x18,0x48,0x89,0x6C,0x24,0x20,0x57,0x48,0x83,0xEC,0x30};
 // Official hk_close_categories overlaps support86EC40: preserve PL->native,
 // then PL's custom open/cursor reset. Complete190B callback40DA0..40E5E,
 // UW F8114 v1 flags2, no descendants/DIR64. Installer42138->42620 binds
@@ -214,16 +201,16 @@ struct Forwarding {
 };
 struct Observation {
     CategoryLifeSites sites;
-    std::array<Forwarding, 3> forwarding;
+    std::array<Forwarding, 2> forwarding;
 };
 CategoryLifeSite forwarded(MemoryView memory, const ImageInfo& game,
                            const std::optional<ImageInfo>& pl, unsigned route, Forwarding& observation) {
-    // Finite route index: populate0, initialize1, supporting close2.
-    const std::array native_pins{game_bindings(game.range).category_lifecycle_contract.pins[1], game_bindings(game.range).category_lifecycle_contract.pins[4], game_bindings(game.range).category_lifecycle_contract.support_pins[20]};
-    constexpr std::array callbacks{pl_populate, pl_initialize, pl_close};
-    constexpr std::array bindings{0xFDEA0U, 0xFE690U, 0xFE480U};
-    const std::array<std::span<const unsigned char>, 3> prefixes{
-        populate_original, initialize_original, close_original};
+    // Playlister populate and supporting close routes.
+    const std::array native_pins{game_bindings(game.range).category_lifecycle_contract.pins[1], game_bindings(game.range).category_lifecycle_contract.support_pins[20]};
+    constexpr std::array callbacks{pl_populate, pl_close};
+    constexpr std::array bindings{0xFDEA0U, 0xFE480U};
+    const std::array<std::span<const unsigned char>, 2> prefixes{
+        populate_original, close_original};
     require(route < native_pins.size(), "category lifecycle invalid finite forwarding route");
     const auto pin = native_pins[route];
     const auto callback = callbacks[route];
@@ -287,8 +274,8 @@ CategoryLifeSite forwarded(MemoryView memory, const ImageInfo& game,
 Observation observe(MemoryView memory, const ImageInfo& game, const std::optional<ImageInfo>& pl) {
     Observation result{};
     for (std::size_t i = 0; i < build_bindings::CategoryLifecycleContract{}.pins.size(); ++i) {
-        if (i == 1 || i == 4)
-            result.sites.entries[i] = forwarded(memory, game, pl, i == 4 ? 1U : 0U, result.forwarding[i == 4 ? 1 : 0]);
+        if (i == 1)
+            result.sites.entries[i] = forwarded(memory, game, pl, 0, result.forwarding[0]);
         else {
             const auto pin = game_bindings(game.range).category_lifecycle_contract.pins[i];
             auto body = copy_image(memory, game.range, pin.begin, pin.end - pin.begin, RangeUse::image_code);
@@ -300,7 +287,7 @@ Observation observe(MemoryView memory, const ImageInfo& game, const std::optiona
         if (pin.begin == game_bindings(game.range).category_lifecycle_contract.category_lookup_rva) {
             // Observe the real incoming PL close chain; never require stock
             // bytes at the patched entry or bypass its post-native reset.
-            (void)forwarded(memory, game, pl, 2, result.forwarding[2]);
+            (void)forwarded(memory, game, pl, 1, result.forwarding[1]);
             continue;
         }
         const auto at = address(game.range, pin.begin, pin.end - pin.begin);
@@ -318,6 +305,11 @@ Observation observe(MemoryView memory, const ImageInfo& game, const std::optiona
     (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.scene_slot_1_rva, 8);
     (void)address(game.range, game_bindings(game.range).category_lifecycle_contract.scene_slot_2_rva, 8);
     result.sites.initialize_caller = address(game.range, game_bindings(game.range).category_lifecycle_contract.sites_initialize_caller_rva, 1);
+    const auto call = copy_image(memory, game.range,
+        game_bindings(game.range).category_lifecycle_contract.sites_initialize_caller_rva - 5, 5, RangeUse::image_code);
+    require(call[0] == std::byte{0xe8} &&
+            relative(result.sites.initialize_caller - 5, value<std::int32_t>(call, 1)) == result.sites.entries[4].address,
+            "category initializer CALL target changed");
     const std::array slots{game_bindings(game.range).category_lifecycle_contract.scene_entry_slot_rva, game_bindings(game.range).category_lifecycle_contract.scene_refresh_slot_rva}, targets{game_bindings(game.range).category_lifecycle_contract.scene_entry_rva, game_bindings(game.range).category_lifecycle_contract.scene_refresh_rva};
     for (std::size_t i = 0; i < slots.size(); ++i) {
         const auto binding = copy_image(memory, game.range, slots[i], 8, RangeUse::image_read);

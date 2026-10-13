@@ -1,5 +1,6 @@
 #include "category_lifecycle_hooks.hpp"
 #include "inline_patch.hpp"
+#include "call_patch.hpp"
 
 #include <windows.h>
 #include <intrin.h>
@@ -44,6 +45,7 @@ struct CategoryLifecycleHooks::State {
     static constinit thread_local State* scope;
     MemoryView memory;
     std::array<std::unique_ptr<detail::InlinePatch>, count> patches;
+    std::unique_ptr<detail::CallPatch> initialize_patch;
     void* const context;
     const Callbacks callbacks;
     const std::uintptr_t initialize_caller;
@@ -72,17 +74,22 @@ struct CategoryLifecycleHooks::State {
             reinterpret_cast<std::uintptr_t>(&scene_tick), reinterpret_cast<std::uintptr_t>(&scene_refresh),
             reinterpret_cast<std::uintptr_t>(&preview_assign), reinterpret_cast<std::uintptr_t>(&selection_restore),
             reinterpret_cast<std::uintptr_t>(&style_apply)};
-        for (std::size_t n = 0; n < count; ++n)
-            patches[n] = std::make_unique<detail::InlinePatch>(m, sites.entries[n].address, sites.entries[n].body, targets[n]);
+        for (std::size_t n = 0; n < count; ++n) {
+            if (n == static_cast<std::size_t>(CategoryLifeEvent::initialize))
+                initialize_patch = std::make_unique<detail::CallPatch>(m, initialize_caller - 5,
+                    sites.entries[n].address, targets[n]);
+            else
+                patches[n] = std::make_unique<detail::InlinePatch>(m, sites.entries[n].address, sites.entries[n].body, targets[n]);
+        }
         require(before_intact(), "disabled category lifecycle hooks changed during construction");
     }
     bool before_intact() const noexcept {
-        for (const auto& patch : patches) if (!patch->before_intact()) return false;
-        return true;
+        for (const auto& patch : patches) if (patch && !patch->before_intact()) return false;
+        return initialize_patch->before_intact();
     }
     bool patches_intact() const noexcept {
-        for (const auto& patch : patches) if (!patch->intact()) return false;
-        return true;
+        for (const auto& patch : patches) if (patch && !patch->intact()) return false;
+        return initialize_patch->intact();
     }
     bool intact() const noexcept {
         return phase.load(std::memory_order_acquire) == Phase::armed && patches_intact();
@@ -108,7 +115,8 @@ struct CategoryLifecycleHooks::State {
     }
     std::uintptr_t original(CategoryLifeEvent event, std::uintptr_t owner, std::uintptr_t argument,
                             std::uintptr_t payload = 0, const RestoreArguments* restore = nullptr) const {
-        const auto entry = patches[static_cast<std::size_t>(event)]->original();
+        const auto entry = event == CategoryLifeEvent::initialize ? initialize_patch->original() :
+            patches[static_cast<std::size_t>(event)]->original();
         if (event == CategoryLifeEvent::adopt || event == CategoryLifeEvent::graph_bind)
             return reinterpret_cast<NativePair>(entry)(owner, argument);
         if (event == CategoryLifeEvent::initialize)
@@ -249,7 +257,7 @@ CategoryLifecycleHooks::CategoryLifecycleHooks(MemoryView memory, const Category
     try {
         require(memory.read && memory.query && callbacks.begin && callbacks.finish,
                 "category lifecycle hook dependencies missing");
-        require(sites.initialize_caller >= 0x10000, "category lifecycle initializer caller missing");
+        require(sites.initialize_caller >= 0x10005, "category lifecycle initializer caller missing");
         require(sites.preview_caller >= 0x10000, "category lifecycle preview caller missing");
         require(sites.restore_caller >= 0x10000, "category lifecycle restore caller missing");
         require(sites.style_apply_caller >= 0x10000 && sites.style_restore_caller >= 0x10000,
@@ -288,7 +296,8 @@ void CategoryLifecycleHooks::arm() {
     self.phase.store(State::Phase::enabling, std::memory_order_release);
     State::live.store(&self, std::memory_order_release);
     try {
-        for (auto& patch : self.patches) patch->enable();
+        for (auto& patch : self.patches) if (patch) patch->enable();
+        self.initialize_patch->enable();
         require(self.patches_intact(), "category lifecycle hooks changed during arm");
         self.phase.store(State::Phase::armed, std::memory_order_release);
     } catch (...) {
