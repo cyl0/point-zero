@@ -43,16 +43,13 @@ bool ResultPlate::enter() noexcept {
 bool ResultPlate::same_chart(const PlayedChart& a, const PlayedChart& b) noexcept {
     return a.surface == b.surface && a.owner == b.owner && a.music == b.music &&
         a.layer == b.layer && a.stream == b.stream && a.player == b.player &&
-        a.players == b.players && a.sole == b.sole && a.chart == b.chart && a.expected == b.expected;
+        a.players == b.players && a.sole == b.sole && a.chart == b.chart;
 }
 bool ResultPlate::chart_live(const PlayedChart& chart) const {
-    std::uintptr_t vtable{};
     std::uint32_t stream{};
     return chart.surface == played_art::Surface::result && chart.owner == chart.layer &&
         chart.player >= 0 && chart.player <= 1 && chart.chart &&
-        calls_.chart.valid(5, chart.stream) >= 0 && game_bindings(game_).result_plate.layer_vtable <= UINTPTR_MAX - game_.base &&
-        contains(game_.base, game_.size, game_.base + game_bindings(game_).result_plate.layer_vtable, sizeof(vtable)) &&
-        read_field(memory_, chart.layer, 0, vtable) && vtable == game_.base + game_bindings(game_).result_plate.layer_vtable &&
+        calls_.chart.valid(5, chart.stream) >= 0 &&
         read_field(memory_, chart.layer, 8, stream) && stream == chart.stream;
 }
 bool ResultPlate::node(const Node& n, std::uint32_t stream, std::uintptr_t parent,

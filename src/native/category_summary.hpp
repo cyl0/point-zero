@@ -12,17 +12,11 @@ struct CategorySummarySite {
 struct CategorySummaryRequest { std::uintptr_t manager{}; int style{}, id{}; };
 struct CategorySummaryBinding { std::uintptr_t category{}, summary{}; };
 
-// Keep native lamp/rival calculation. Redirect only a registered private ID's
-// category and 168-byte summary storage, before native category dereferences.
-// This does not own the bank, publish it, interpret scores or duplicate the
-// native algorithm. Metadata routing and complete call admission are required.
+// Keep native calculation, substituting only storage supplied by the owner.
 class CategorySummary final {
 public:
     struct Callbacks {
-        // Read-only owner check. True supplies live private storage for this
-        // exact manager/style/ID. Caller validates category/membership/metadata
-        // and retains both allocations through finish. False refuses the call;
-        // a private ID must never fall through to native indexed storage.
+        // True supplies retained storage; false forwards the existing calculation.
         bool (*prepare)(void*, const CategorySummaryRequest&, CategorySummaryBinding&) noexcept{};
         // Called once after an accepted preparation, also on binding failure or
         // native exception. completed means the exact bind ran once and native
@@ -33,8 +27,7 @@ public:
         // preserve the original return. The entered call holds callback lifetime.
         void (*native_finish)(void*, const CategorySummaryRequest&, std::uintptr_t caller, bool completed) noexcept{};
     };
-    // Sorted unique private IDs in230..999, at most144; copied before arming.
-    CategorySummary(MemoryView, const CategorySummarySite&, std::span<const int> ids,
+    CategorySummary(MemoryView, const CategorySummarySite&,
                     void* context, Callbacks);
     ~CategorySummary() noexcept;
     CategorySummary(const CategorySummary&) = delete;
@@ -46,9 +39,5 @@ private:
     struct State;
     State* state_{};
 };
-// Construction/arm/destruction are serialized. Exposed hooks/forwarding stay
-// resident. Unknown IDs always forward once, shadowing any outer private scope.
-// Wrong-thread/retired/refused private calls return zero without native effects.
-// The hook itself performs no per-call page query, allocation, native scan,
-// summary cache or retry. Bank checks remain the owner's responsibility.
+// Exposed hooks remain resident; retired callbacks forward to the existing route.
 } // namespace point_zero::native

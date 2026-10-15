@@ -9,7 +9,7 @@ namespace point_zero::native::detail {
 // Once exposed, the owner must retain this allocation for process lifetime.
 class CallPatch final {
 public:
-    CallPatch(MemoryView, std::uintptr_t site, std::uintptr_t callee, std::uintptr_t destination);
+    CallPatch(MemoryView, std::uintptr_t site, std::uintptr_t destination);
     bool before_intact() const noexcept;
     bool intact() const noexcept;
     void enable();

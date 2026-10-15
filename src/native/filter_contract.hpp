@@ -10,13 +10,6 @@ struct FilterContract {
     NativeFilterRebuild rebuild{};
 };
 
-// Finite, read-only LDJ-010-2026081900 admission. Requires a structurally
-// inspected, retained game image AND GameDriver's catalogue admission (which
-// owns the selected catalogue getter). Calls no native function.
-// Throws on changed selected bodies/bindings, range, allocation or permissions.
-// Map ownership, captured category/style, live values and hook lifetime remain
-// the reader/hook's responsibility. Returned snapshots own their bytes.
-// Rebuild is returned only after both passes. Invoking it alone does not prove
-// coherent filter/toggle composition: native summary precedes active-set restore.
+// Native summary must precede active-set restoration when rebuilding.
 FilterContract admit_filter_contract(MemoryView, const ImageInfo& game);
 } // namespace point_zero::native

@@ -82,15 +82,6 @@ bool resolve(MemoryView memory, ImageRange game, const Catalog& catalog,
     const auto* row = catalog.find({first.song, mode.style, difficulty});
     if (!row) return false;
 
-    const auto name_rva = (compact ? game_bindings(game).list_chart.compact_names : game_bindings(game).list_chart.normal_names) +
-        sizeof(std::uintptr_t) * static_cast<std::size_t>(13 * difficulty + row->native_level);
-    if (name_rva > UINTPTR_MAX - game.base) return false;
-    const auto name_slot = game.base + name_rva;
-    std::uintptr_t expected{};
-    if (!contains(game.base, game.size, name_slot, sizeof(expected)) ||
-        !read_field(memory, name_slot, 0, expected) || expected < 0x10000 ||
-        expected != reinterpret_cast<std::uintptr_t>(incoming)) return false;
-
     // This callback and the chart table run on the native game thread. The
     // immutable catalog and current owner identify the row without a second
     // getter call or a second snapshot of every field.

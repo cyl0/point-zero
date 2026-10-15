@@ -9,7 +9,7 @@ namespace point_zero::native {
 class LevelMembership final {
 public:
     // One attempt; allocate the required member capacity before building.
-    // A chart occupies ALL plus a decimal child only when explicitly assigned.
+    // Unassigned charts retain their live integer level; only assignments add a decimal child.
     void prepare(std::size_t capacity = 4 * LevelPopulation::style_limit);
     // Input is the strictly Key-ordered, stable LevelPopulation snapshot, not
     // the registered catalogue. It must not alias this object's member storage.

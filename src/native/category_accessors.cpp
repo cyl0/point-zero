@@ -40,8 +40,7 @@ struct CategoryAccessors::State {
     static std::atomic<bool> reserved;
     static std::atomic<State*> live;
     const std::uintptr_t style;
-    const std::vector<int> ids;
-    const bool contiguous;
+    std::vector<int> ids;
     std::vector<CategoryAccessBinding> bindings;
     std::array<std::unique_ptr<detail::InlinePatch>, count> patches;
     std::atomic<Phase> phase{Phase::disabled};
@@ -51,7 +50,7 @@ struct CategoryAccessors::State {
 
     State(MemoryView m, const CategoryAccessorSites& sites, std::span<const int> selected)
         : style(sites.style.address), ids(selected.begin(), selected.end()),
-          contiguous(static_cast<std::size_t>(ids.back() - ids.front() + 1) == ids.size()), bindings(2 * ids.size()) {
+          bindings(2 * ids.size()) {
         const std::array destinations{
             reinterpret_cast<std::uintptr_t>(&lookup), reinterpret_cast<std::uintptr_t>(&active),
             reinterpret_cast<std::uintptr_t>(&clear), reinterpret_cast<std::uintptr_t>(&rival),
@@ -68,9 +67,7 @@ struct CategoryAccessors::State {
         return reinterpret_cast<F>(patches[static_cast<unsigned>(which)]->original());
     }
     std::size_t index(int id) const noexcept {
-        // Stock IDs and unrelated custom folders forward without a search.
-        if (id < ids.front() || id > ids.back()) return ids.size();
-        if (contiguous) return static_cast<std::size_t>(id - ids.front());
+        if (GetCurrentThreadId() != thread || id < ids.front() || id > ids.back()) return ids.size();
         const auto at = std::lower_bound(ids.begin(), ids.end(), id);
         return at != ids.end() && *at == id ? static_cast<std::size_t>(at - ids.begin()) : ids.size();
     }
@@ -87,14 +84,15 @@ struct CategoryAccessors::State {
         return &bindings[static_cast<std::size_t>(selected) * ids.size() + i];
     }
     const CategoryAccessBinding* find(std::uintptr_t owner, std::size_t i, int selected) const noexcept {
-        return available(owner) ? resolve(owner, i, selected) : nullptr;
+        if (!available(owner) || i == ids.size()) return nullptr;
+        const auto* binding = resolve(owner, i, selected);
+        return binding && binding->category ? binding : nullptr;
     }
     static std::uintptr_t __fastcall lookup(std::uintptr_t owner, int id, int selected) {
         auto& self = *live.load(std::memory_order_acquire);
         const auto i = self.index(id);
-        if (i == self.ids.size()) return self.original<Lookup>(CategoryAccessor::lookup)(owner, id, selected);
-        const auto* b = self.find(owner, i, selected);
-        return b ? b->category : 0;
+        if (const auto* b = self.find(owner, i, selected)) return b->category;
+        return self.original<Lookup>(CategoryAccessor::lookup)(owner, id, selected);
     }
     static std::uintptr_t __fastcall active(std::uintptr_t owner) {
         auto& self = *live.load(std::memory_order_acquire);
@@ -102,8 +100,7 @@ struct CategoryAccessors::State {
         if (buffer(owner, 0x2A428) && load(owner + 0x2A420, id)) {
             const auto i = self.index(id);
             if (i != self.ids.size()) {
-                const auto* b = self.find(owner, i, 3);
-                return b ? b->category : 0;
+                if (const auto* b = self.find(owner, i, 3)) return b->category;
             }
         }
         return self.original<Active>(CategoryAccessor::active)(owner);
@@ -122,23 +119,23 @@ struct CategoryAccessors::State {
     static int __fastcall clear(std::uintptr_t owner, int id, int difficulty, int player) {
         auto& self = *live.load(std::memory_order_acquire);
         const auto i = self.index(id);
-        if (i == self.ids.size()) return self.original<Lamp>(CategoryAccessor::clear)(owner, id, difficulty, player);
+        if (!self.find(owner, i, 3)) return self.original<Lamp>(CategoryAccessor::clear)(owner, id, difficulty, player);
         return self.lamp(owner, i, difficulty, player, false);
     }
     static int __fastcall rival(std::uintptr_t owner, int id, int difficulty, int player) {
         auto& self = *live.load(std::memory_order_acquire);
         const auto i = self.index(id);
-        if (i == self.ids.size()) return self.original<Lamp>(CategoryAccessor::rival)(owner, id, difficulty, player);
+        if (!self.find(owner, i, 3)) return self.original<Lamp>(CategoryAccessor::rival)(owner, id, difficulty, player);
         return self.lamp(owner, i, difficulty, player, true);
     }
     template<CategoryAccessor Which, unsigned Offset>
     static int __fastcall badge(std::uintptr_t owner, int id) {
         auto& self = *live.load(std::memory_order_acquire);
         const auto i = self.index(id);
-        if (i == self.ids.size()) return self.original<Badge>(Which)(owner, id);
         const auto* b = self.find(owner, i, 3);
+        if (!b) return self.original<Badge>(Which)(owner, id);
         unsigned char value{};
-        return b && b->summary && load(b->summary + Offset, value) ? value : 0;
+        return b->summary && load(b->summary + Offset, value) ? value : 0;
     }
     bool before_intact() const noexcept {
         return std::all_of(patches.begin(), patches.end(), [](const auto& p) { return p->before_intact(); });
@@ -158,7 +155,7 @@ CategoryAccessors::CategoryAccessors(MemoryView memory, const CategoryAccessorSi
         require(memory.read && memory.query && !ids.empty() && ids.size() <= 144,
                 "category accessor memory or IDs missing/excessive");
         for (std::size_t i = 0; i < ids.size(); ++i)
-            require(ids[i] >= 230 && ids[i] < 1000 && (!i || ids[i - 1] < ids[i]), "category accessor ID/order invalid");
+            require(ids[i] >= 230 && (!i || ids[i - 1] < ids[i]), "category accessor ID/order invalid");
         std::array<const CategoryAccessorSite*, count + 1> all{};
         for (unsigned i = 0; i < count; ++i) all[i] = &sites.entries[i];
         all.back() = &sites.style;
@@ -201,11 +198,20 @@ bool CategoryAccessors::bind(std::uintptr_t manager, std::span<const CategoryAcc
     if (self.phase.load(std::memory_order_acquire) != State::Phase::armed || GetCurrentThreadId() != self.thread ||
         !buffer(manager, 0x2A428) || input.size() != self.bindings.size()) return false;
     for (std::size_t i = 0; i < input.size(); ++i)
-        if (input[i].id != self.ids[i % self.ids.size()] || input[i].style != static_cast<int>(i / self.ids.size()) ||
-            !valid(input[i])) return false;
+        if (input[i].id < 230 || input[i].style != static_cast<int>(i / self.ids.size()) ||
+            (i && i < self.ids.size() && input[i - 1].id >= input[i].id) ||
+            (i >= self.ids.size() && input[i].id != input[i - self.ids.size()].id) || !valid(input[i])) return false;
+    for (std::size_t i = 0; i < self.ids.size(); ++i) self.ids[i] = input[i].id;
     std::copy(input.begin(), input.end(), self.bindings.begin());
     self.manager = manager;
     return true;
+}
+int CategoryAccessors::definition_index(std::uintptr_t manager, int id) noexcept {
+    const auto* self = State::live.load(std::memory_order_acquire);
+    if (!self || !self->available(manager)) return -1;
+    const auto i = self->index(id);
+    return i < self->ids.size() && (self->bindings[i].category || self->bindings[self->ids.size() + i].category)
+        ? static_cast<int>(i) : -1;
 }
 bool CategoryAccessors::intact() const noexcept { return state_->intact(); }
 } // namespace point_zero::native

@@ -39,9 +39,9 @@ bool stack_word(std::uintptr_t address, std::uintptr_t& out) noexcept {
     __try { out = *reinterpret_cast<const std::uintptr_t*>(address); return true; }
     __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
-std::array<const PlayedFunction*, 11> functions(const PlayedSites& sites, const StepUpSites& stepup) noexcept {
+std::array<const PlayedFunction*, 7> functions(const PlayedSites& sites, const StepUpSites& stepup) noexcept {
     return {&sites.named, &sites.confirmation, &sites.hud, &sites.result, &sites.result_bind, &sites.notes_update,
-            &stepup.builder, &stepup.fast_bind, &stepup.scene_constructor, &stepup.confirmation, &stepup.committed_tuple};
+            &stepup.builder};
 }
 const PlayedFunction& containing(const PlayedSites& sites, const StepUpSites& stepup, std::size_t index) noexcept {
     if (index == stepup_index) return stepup.builder;

@@ -6,6 +6,7 @@
 #include <atomic>
 #include <bit>
 #include <cstring>
+#include <climits>
 #include <memory>
 #include <stdexcept>
 
@@ -22,7 +23,6 @@ int integer(std::uintptr_t value) noexcept {
     return std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(value));
 }
 bool difficulty(int value) noexcept { return value >= -1 && value <= 4; }
-bool parent(int id) noexcept { return CategoryBank::part(id) == 0; }
 bool writable(MemoryView m, std::uintptr_t at) noexcept {
     MemoryRegion r{};
     return m.query && m.query(m.context, at, r) && contains(r.begin, r.size, at, sizeof(int)) &&
@@ -63,7 +63,6 @@ struct CategoryRequestHooks::State {
 
     State(MemoryView m, const CategoryRequestSites& s, void* c, Route r, Failure f)
         : memory(m), sites(s), context(c), route(r), failure(f) {
-        require(read_getter(), "category request manager getter is not the admitted eight-byte leaf");
         constexpr std::array<safetyhook::MidHookFn, 3> callbacks{category, song, rival};
         for (std::size_t i = 0; i < patches.size(); ++i) {
             const auto& site = sites.entries[i];
@@ -71,16 +70,6 @@ struct CategoryRequestHooks::State {
                 std::span(site.body).subspan(site.capture - site.address, 5), callbacks[i]);
         }
         require(before_intact(), "category requests changed during construction");
-    }
-    bool read_getter() noexcept {
-        __try {
-            std::array<std::byte, 8> getter{}, actual{};
-            return read_bytes(memory, sites.manager_getter, getter) &&
-                (memory == current_process_memory() ||
-                 (read_bytes(current_process_memory(), sites.manager_getter, actual) && getter == actual)) &&
-                getter[0] == std::byte{0x48} && getter[1] == std::byte{0x8b} &&
-                getter[2] == std::byte{0x05} && getter[7] == std::byte{0xc3};
-        } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
     }
     bool before_intact() const noexcept {
         __try {
@@ -175,16 +164,12 @@ struct CategoryRequestHooks::State {
     void dispatch(std::size_t index, safetyhook::Context& registers) noexcept {
         if (!enter()) return; // No borrowed MemoryView/context access after closure.
         routing = true;
-        bool matched{}, called{}, failed{};
+        bool called{}, failed{};
         __try {
             __try {
                 if (!frame_is(index, registers)) return;
-                matched = true;
                 Capture capture{};
-                if (!decode(index, registers, capture)) {
-                    registers.rip = sites.entries[index].cancel;
-                    return;
-                }
+                if (!decode(index, registers, capture)) return;
                 called = true;
                 const auto result = route(context, capture.request);
                 const auto old = capture.request.category;
@@ -192,7 +177,7 @@ struct CategoryRequestHooks::State {
                 if (result.action == CategoryRequestAction::native) {
                     if (unchanged) return;
                     Vector current{};
-                    if (index == 1 && parent(old) && result.category == old + 1 &&
+                    if (index == 1 && old < INT_MAX && result.category == old + 1 &&
                         read_value(memory, capture.vector, current) && current == capture.candidates &&
                         replace(memory, registers.rsi, old, result.category)) return;
                 } else if (result.action == CategoryRequestAction::heading && index == 0 && unchanged) {
@@ -209,11 +194,8 @@ struct CategoryRequestHooks::State {
                 // and every other native register. Song must run next/free.
                 registers.rip = sites.entries[index].cancel;
             } __except (EXCEPTION_EXECUTE_HANDLER) {
-                // Once the real caller/frame is established, failed decoding
-                // must not run the manager/group continuation. Only an entered
-                // route may have committed owner state and needs notification.
                 failed = called;
-                if (matched) registers.rip = sites.entries[index].cancel;
+                if (called) registers.rip = sites.entries[index].cancel;
             }
             // Separate boundary: even a fault in Failure is contained and must
             // not cause a second notification. The callback lease covers it.

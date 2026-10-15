@@ -37,7 +37,6 @@ struct ListHook::State {
     static std::atomic<bool> reserved;
     static std::atomic<State*> live;
     std::array<std::unique_ptr<detail::CallPatch>, 4> patches;
-    Draw original;
     void* const context;
     const Callback callback;
     const std::array<std::uintptr_t, 4> callers;
@@ -47,10 +46,15 @@ struct ListHook::State {
     bool retained{};
 
     State(MemoryView view, const ListHookSite& site, void* opaque, Callback call)
-        : original(reinterpret_cast<Draw>(site.address)), context(opaque), callback(call), callers(site.callers) {
+        : context(opaque), callback(call), callers(site.callers) {
         for (std::size_t i = 0; i < patches.size(); ++i)
-            patches[i] = std::make_unique<detail::CallPatch>(view, callers[i] - 5, site.address,
+            patches[i] = std::make_unique<detail::CallPatch>(view, callers[i] - 5,
                 reinterpret_cast<std::uintptr_t>(&pz_list_draw_entry));
+    }
+    Draw original(std::uintptr_t caller) const noexcept {
+        for (std::size_t i = 0; i < callers.size(); ++i)
+            if (callers[i] == caller) return reinterpret_cast<Draw>(patches[i]->original());
+        return reinterpret_cast<Draw>(patches.front()->original());
     }
     bool intact() const noexcept {
         if (phase.load(std::memory_order_acquire) != Phase::armed) return false;
@@ -83,21 +87,20 @@ struct ListHook::State {
         std::uint32_t alpha, std::uint32_t layer, std::uint32_t flags,
         std::uintptr_t owner, std::uintptr_t return_address) {
         auto& self = *live.load(std::memory_order_acquire);
-        if (!self.enter(return_address)) return self.original(manager, name, x, y, alpha, layer, flags);
+        const auto original = self.original(return_address);
+        if (!self.enter(return_address)) return original(manager, name, x, y, alpha, layer, flags);
         __try {
             char copied[96]{};
             const char* callback_name = name;
             if (return_address == self.callers[0]) {
                 if (!bounded_name(name, copied))
-                    return self.original(manager, name, x, y, alpha, layer, flags);
+                    return original(manager, name, x, y, alpha, layer, flags);
                 callback_name = copied;
             }
-            // Badge callers load the selected live table pointer. Preserve its
-            // identity for the callback; string copying would lose that proof.
             std::uintptr_t result{};
             if (self.callback(self.context, owner, return_address,
                 manager, callback_name, x, y, alpha, layer, flags, result)) return result;
-            return self.original(manager, name, x, y, alpha, layer, flags);
+            return original(manager, name, x, y, alpha, layer, flags);
         } __finally {
             self.leave();
         }
@@ -110,7 +113,7 @@ ListHook::ListHook(MemoryView memory, const ListHookSite& site, void* context, C
     bool available = false;
     require(State::reserved.compare_exchange_strong(available, true), "list hook process slot already reserved");
     try {
-        require(memory.read && memory.query && callback && site.address >= 0x10000, "list hook arguments missing or invalid");
+        require(memory.read && memory.query && callback, "list hook arguments missing or invalid");
         for (std::size_t i = 0; i < site.callers.size(); ++i) {
             require(site.callers[i] >= 0x10005, "list hook caller is absent");
             for (std::size_t j = 0; j < i; ++j)

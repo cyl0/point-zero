@@ -29,6 +29,10 @@ template<class T> bool read(MemoryView m, std::uintptr_t at, T& out) noexcept {
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 bool browsing_mode(int mode) noexcept { return mode == 0 || mode == 6; }
+bool native_level(std::uintptr_t manager, std::uintptr_t category, int id, int style) noexcept {
+    return id >= 6 && id <= 17 && style >= 0 && style < 2 &&
+        category == manager + 16 + sizeof(category_layout::Category) * (230ULL * style + id);
+}
 bool read_scene_owner(MemoryView memory, ImageRange game, std::uintptr_t& manager,
                       std::uintptr_t& list, std::uintptr_t expected_manager = 0,
                       std::uintptr_t expected_list = 0) noexcept {
@@ -59,7 +63,7 @@ struct CategoryGenerations::Generation {
     Generation(const AdapterContext& c, CategoryGenerationCalls calls,
                std::span<const CategoryMetadataEntry> definitions)
         : bank(c.memory, calls.storage, calls.bank, calls.badges, definitions),
-          roots(std::make_unique<CategoryRoots>(c.memory, c.modules.game.range, calls.vectors, calls.lookup)) {}
+          roots(std::make_unique<CategoryRoots>(c.memory, c.modules.game.range, calls.vectors)) {}
     bool references(std::uintptr_t category) const noexcept {
         return category && std::any_of(bindings.begin(), bindings.end(), [category](const auto& b) {
             return b.category == category;
@@ -100,7 +104,7 @@ CategoryGenerations::CategoryGenerations(const AdapterContext& context, Category
         definitions.size() != definitions_.size())
         throw std::invalid_argument("incomplete native category generation dependencies");
     for (std::size_t n = 0; n < definitions.size(); ++n) {
-        if (definitions[n].id != CategoryBank::first_id + static_cast<int>(n) ||
+        if (definitions[n].id != definitions.front().id + static_cast<int>(n) ||
             definitions[n].definition.difficulty_locked != 1)
             throw std::invalid_argument("invalid native category generation definitions");
         definitions_[n] = definitions[n];
@@ -112,9 +116,6 @@ void CategoryGenerations::prepare() {
     attempted_ = true;
     thread_ = GetCurrentThreadId();
     population_.prepare();
-    for (std::size_t n = 0; n < empty_.size(); ++n)
-        empty_[n] = {CategoryBank::first_id + static_cast<int>(n % CategoryBank::per_style),
-                     static_cast<int>(n / CategoryBank::per_style), 0, 0};
     prepared_ = true;
 }
 bool CategoryGenerations::thread() const noexcept { return prepared_ && thread_ == GetCurrentThreadId(); }
@@ -132,7 +133,9 @@ bool CategoryGenerations::detach() noexcept {
         g.navigation_bound = false;
     }
     if (g.mapped) {
-        if (!accessors_.bind(g.manager, empty_)) { fault(); return false; }
+        auto empty = g.bindings;
+        for (auto& binding : empty) binding.category = binding.summary = 0;
+        if (!accessors_.bind(g.manager, empty)) { fault(); return false; }
         g.mapped = false;
     }
     current_ = nullptr;
@@ -175,7 +178,6 @@ bool CategoryGenerations::initialize(std::uintptr_t navigation) {
     for (const auto& old : generations_)
         if (old->group == group && old->group_reference) return false;
 
-    // Retain ownership BEFORE any native call can partially expose it.
     auto owned = std::make_unique<Generation>(context_, calls_, definitions_);
     auto& g = *owned;
     g.manager = manager; g.list = list; g.group = group; g.navigation = navigation;
@@ -196,7 +198,7 @@ bool CategoryGenerations::build_bank(Generation& g) {
     }
     if (g.bank.state() != CategoryBankState::empty || building_) return false;
     building_ = &g;
-    const bool built = g.bank.build(g.manager, g.list, population_);
+    const bool built = g.bank.build(g.manager, g.list, population_, calls_.lookup);
     building_ = nullptr;
     if (!built) { g.uncertain = g.bank.state() == CategoryBankState::uncertain; return false; }
     const auto bindings = g.bank.bindings();
@@ -216,7 +218,7 @@ CategoryGenerations::ExchangeResult CategoryGenerations::publish_roots(Generatio
         return {g.uncertain ? Exchange::uncertain : Exchange::unchanged, false};
     }
     if (g.roots->state() == CategoryRootsState::withdrawn)
-        g.roots = std::make_unique<CategoryRoots>(context_.memory, context_.modules.game.range, calls_.vectors, calls_.lookup);
+        g.roots = std::make_unique<CategoryRoots>(context_.memory, context_.modules.game.range, calls_.vectors);
     if (g.roots->state() != CategoryRootsState::empty ||
         !g.roots->prepare(g.manager, g.list, g.group, g.bindings))
         return {g.roots->state() == CategoryRootsState::uncertain ? Exchange::uncertain : Exchange::unchanged, false};
@@ -261,12 +263,10 @@ bool CategoryGenerations::tick_context(std::uintptr_t scene, Tick& out) {
     out.mode = calls_.mode();
     if (!browsing_mode(out.mode)) return false;
     const auto game = context_.modules.game.range.base;
-    std::uintptr_t manager{}, list{}, vtable{}, target{}, callback{}, queued{};
+    std::uintptr_t manager{}, list{}, target{}, callback{}, queued{};
     int adjustment{}, style{};
     std::uint8_t enabled{}, confirm{}, busy{}, editor{}, open{}, category_open{};
-    if (!read(context_.memory, scene, vtable) || vtable != game + game_bindings(context_.modules.game.range).category_generations.scene_vtable_rva ||
-        !read_scene_owner(context_.memory, context_.modules.game.range, manager, list, out.manager, out.list) ||
-        !read(context_.memory, list, vtable) || vtable != game + game_bindings(context_.modules.game.range).category_generations.list_vtable_rva ||
+    if (!read_scene_owner(context_.memory, context_.modules.game.range, manager, list, out.manager, out.list) ||
         !read_scene_styles(context_.memory, manager, list, out.style, style) ||
         out.style < 0 || out.style > 1 || style != out.style ||
         !read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, out.dp) || out.dp != out.style ||
@@ -373,15 +373,14 @@ void CategoryGenerations::refresh_filters(Generation& generation, int style, int
 bool CategoryGenerations::change_preference(Selection& before, bool enabled) {
     auto& g = *before.generation;
     const int source = before.id;
-    const bool integer = source >= 6 && source <= 17;
-    const bool custom = CategoryBank::owned(source);
+    const bool integer = native_level(before.manager, before.category, source, before.style);
+    const bool custom = g.bank.owned(source, before.style);
     const bool level = before.group == 1 && (integer || custom);
-    int wanted_level = integer ? source - 5 : custom ? CategoryBank::level(source) : 0;
+    int wanted_level = integer ? source - 5 : custom ? g.bank.level(source) : 0;
     if (level && before.chart) {
         const int difficulty = before.active[0] ? before.p1 : before.p2;
         const auto* row = context_.catalog.find({before.song, before.style, difficulty});
-        if (!row) return false;
-        wanted_level = enabled ? row->effective_tenths / 10 : row->native_level;
+        if (row) wanted_level = enabled ? row->effective_tenths / 10 : row->native_level;
     }
     if (level && before.open && !close_leaf(before.navigation, before.category)) return false;
     if (enabled) {
@@ -406,9 +405,9 @@ bool CategoryGenerations::change_preference(Selection& before, bool enabled) {
     auto force_open = before.open;
     if (level) {
         if (enabled && before.open && wanted_level >= 1 && wanted_level <= 12 &&
-            g.bindings[before.style * CategoryBank::per_style + CategoryBank::id(wanted_level, 0) - CategoryBank::first_id].category) {
+            g.bindings[before.style * CategoryBank::per_style + g.bank.id(wanted_level, 0) - g.bank.base_id()].category) {
             if (!g.roots->select_parent(wanted_level, before.style) || !g.roots->enter(wanted_level, before.style)) return false;
-            target = CategoryBank::id(wanted_level, 1); // Native opens ALL and searches the original chart tuple.
+            target = g.bank.id(wanted_level, 1); // Native opens ALL and searches the original chart tuple.
         } else if (!enabled && before.chart) {
             target = wanted_level + 5;
         } else {
@@ -440,9 +439,13 @@ bool CategoryGenerations::route_return(const CategoryLifeRequest& request) {
     if (!read(context_.memory, g.list + 0x84, group)) return false;
     if (group != 1) return true; // Preserve native group overrides on entry.
     auto& target = *request.restore;
-    const bool searched = target.category == 110; // Native temporary song-search category.
-    const bool private_id = CategoryBank::owned(target.category);
-    const bool integer = target.category >= 6 && target.category <= 17;
+    int style{};
+    if (!read(context_.memory, g.list + 0x78, style) || style < 0 || style > 1) return true;
+    const auto category = calls_.lookup(g.manager, target.category, style);
+    const bool searched = target.category == 110 &&
+        category == g.manager + 16 + sizeof(category_layout::Category) * (230ULL * style + 110);
+    const bool private_id = g.bank.owned(target.category, style);
+    const bool integer = native_level(g.manager, category, target.category, style);
     if (!searched && !private_id && !integer && !g.roots->page_level()) return true;
 
     Selection before;
@@ -459,9 +462,9 @@ bool CategoryGenerations::route_return(const CategoryLifeRequest& request) {
         // full roots page, without opening our decimal submenu on return.
         level = 1;
     } else if (private_id) {
-        level = CategoryBank::level(target.category);
-        leaf = CategoryBank::part(target.category) != 0 &&
-            g.bindings[before.style * CategoryBank::per_style + target.category - CategoryBank::first_id].category;
+        level = g.bank.level(target.category);
+        leaf = g.bank.part(target.category) != 0 &&
+            g.bindings[before.style * CategoryBank::per_style + target.category - g.bank.base_id()].category;
     } else if (integer) {
         level = target.category - 5;
         // A stock saved LEVEL may predate this launch's custom preference.
@@ -471,8 +474,8 @@ bool CategoryGenerations::route_return(const CategoryLifeRequest& request) {
             if (const auto* row = context_.catalog.find({target.song, before.style, target.p1}))
                 level = row->effective_tenths / 10;
         }
-        target.category = CategoryBank::id(level, 1);
-        leaf = g.bindings[before.style * CategoryBank::per_style + target.category - CategoryBank::first_id].category != 0;
+        target.category = g.bank.id(level, 1);
+        leaf = g.bindings[before.style * CategoryBank::per_style + target.category - g.bank.base_id()].category != 0;
     }
     if (g.roots->page_level() && (!leaf || g.roots->page_level() != level))
         if (!g.roots->leave()) return false;
@@ -483,10 +486,10 @@ bool CategoryGenerations::route_return(const CategoryLifeRequest& request) {
     } else if (level) {
         // An empty former child is not an ALL request. Show the integer roots,
         // allowing native's existing ID fallback when its parent also vanished.
-        target.category = CategoryBank::id(level, 0);
+        target.category = g.bank.id(level, 0);
         target.force_open = 0;
         returning_.closed = true;
-        if (g.bindings[before.style * CategoryBank::per_style + target.category - CategoryBank::first_id].category)
+        if (g.bindings[before.style * CategoryBank::per_style + target.category - g.bank.base_id()].category)
             returning_.target = target.category;
     }
     return current_ == &g && same_view(context_.state.view(), before.view);
@@ -585,12 +588,11 @@ bool CategoryGenerations::refresh_context(int style) {
     if (!r.generation || current_ != r.generation ||
         !same_view(context_.state.view(), r.view) || calls_.mode() != r.mode) return false;
     const auto& g = *r.generation;
-    std::uintptr_t manager{}, list{}, vtable{};
+    std::uintptr_t manager{}, list{};
     int raw{}, normalized{}, group{}, dp{};
     std::array<int, 2> active{};
     const auto game = context_.modules.game.range.base;
     return read_scene_owner(context_.memory, context_.modules.game.range, manager, list, g.manager, g.list) &&
-        read(context_.memory, list, vtable) && vtable == game + game_bindings(context_.modules.game.range).category_generations.list_vtable_rva &&
         read_scene_styles(context_.memory, manager, list, raw, normalized) &&
         raw == style && normalized == (style == 2 ? 0 : style) &&
         read(context_.memory, list + 0x84, group) && group == r.group &&
@@ -615,7 +617,8 @@ bool CategoryGenerations::before_style(const CategoryLifeRequest& request) {
         std::uint8_t open{};
         if (!pointer(category, sizeof(category_layout::Category)) ||
             !read(context_.memory, category, id) || !read(context_.memory, category + 4, open) || open != refresh_.open) return false;
-        if ((id >= 6 && id <= 17) || (id >= CategoryBank::first_id && id < CategoryBank::first_id + CategoryBank::per_style)) {
+        const int source = refresh_.source == 2 ? 0 : refresh_.source;
+        if (native_level(g.manager, category, id, source) || g.bank.owns(category, id, source, g.list)) {
             if (!close_leaf(g.navigation, category)) return false;
         }
     }
@@ -725,11 +728,12 @@ bool CategoryGenerations::route_style(const CategoryLifeRequest& request) {
     auto& r = refresh_;
     auto& g = *r.generation;
     auto& target = *request.restore;
-    const bool custom = CategoryBank::owned(target.category);
-    const bool integer = target.category >= 6 && target.category <= 17;
+    const int source = r.source == 2 ? 0 : r.source;
+    const bool custom = g.bank.owned(target.category, source);
+    const bool integer = native_level(g.manager, calls_.lookup(g.manager, target.category, source), target.category, source);
     if ((r.source == 2 || refreshing_style_ == 2) && r.view.preference && r.level && r.group == 1 && (custom || integer)) {
         const int style = refreshing_style_ == 2 ? 0 : refreshing_style_;
-        int level = custom ? CategoryBank::level(target.category) : target.category - 5;
+        int level = custom ? g.bank.level(target.category) : target.category - 5;
         if (target.song > 0 && target.p1 >= 0 && target.p1 <= 4) {
             if (const auto* row = context_.catalog.find({target.song, style, target.p1}))
                 level = refreshing_style_ == 2 ? row->native_level : row->effective_tenths / 10;
@@ -752,8 +756,8 @@ bool CategoryGenerations::route_style(const CategoryLifeRequest& request) {
             if (!read(context_.memory, g.group + 0x78, same) || same != roots) return false;
             if (!present) target.force_open = 0;
         } else {
-            const auto parent = CategoryBank::id(level, 0);
-            const bool present = g.bindings[style * CategoryBank::per_style + parent - CategoryBank::first_id].category != 0;
+            const auto parent = g.bank.id(level, 0);
+            const bool present = g.bindings[style * CategoryBank::per_style + parent - g.bank.base_id()].category != 0;
             if (r.open && present) {
                 if (!g.roots->select_parent(level, style) || !g.roots->enter(level, style)) return false;
                 target.category = parent + 1;
@@ -782,12 +786,11 @@ bool CategoryGenerations::capture(Selection& out) {
     if (out.view.phase != FeaturePhase::ready) return false;
     out.mode = calls_.mode();
     if (!browsing_mode(out.mode)) return false;
-    std::uintptr_t manager{}, list{}, vtable{};
+    std::uintptr_t manager{}, list{};
     int list_style{};
     std::uint8_t busy{}, editor{};
     const auto game = context_.modules.game.range;
     if (!read_scene_owner(context_.memory, game, manager, list, out.manager, out.list) ||
-        !read(context_.memory, list, vtable) || vtable != game.base + game_bindings(context_.modules.game.range).category_generations.list_vtable_rva ||
         !read_scene_styles(context_.memory, manager, list, out.style, list_style) ||
         out.style < 0 || out.style > 1 || list_style != out.style ||
         !read(context_.memory, list + 0x84, out.group) || out.group < 0 ||
@@ -810,12 +813,9 @@ bool CategoryGenerations::capture(Selection& out) {
     out.charts = category.charts; out.inserted = category.insert_count;
     out.working = category.preferences;
     if (filtered(out.id)) for (const int diff : out.working) if (diff < 0 || diff > 4) return false;
-    if (out.id >= 0 && out.id < 230) {
-        if (out.category != manager + 16 + sizeof(category) * (230ULL * out.style + out.id)) return false;
-    } else if (CategoryBank::owned(out.id)) {
-        if (out.group != 1 || !current_->mapped || !current_->bank.owns(out.category, out.id, out.style, list)) return false;
-    } else if (out.id < 1000 || out.group != 5 || !context_.modules.playlister ||
-               calls_.lookup(manager, out.id, out.style) != out.category) return false;
+    if (out.id < 0 || calls_.lookup(manager, out.id, out.style) != out.category) return false;
+    if (current_->bank.owned(out.id, out.style) &&
+        (!current_->mapped || !current_->bank.owns(out.category, out.id, out.style, list))) return false;
     if (out.open) {
         if (category.cursor < 0 || category.cursor >= category.bar_count) return false;
         category_layout::Bar bar;
@@ -1151,12 +1151,23 @@ bool CategoryGenerations::close_request(Selection& before) {
 CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& request) {
     using Action = CategoryRequestAction;
     const CategoryRequestResult reject{Action::reject, request.category}, native{Action::native, request.category};
-    const bool owned = CategoryBank::owned(request.category);
-    if (!current_ || request.selection != current_->navigation - 0x328) return owned ? reject : native;
-    if (!context_.state.view().enabled()) return owned ? reject : native;
+    if (!current_ || request.selection != current_->navigation - 0x328) return native;
     auto& g = *current_;
+    int style{};
+    if (!read(context_.memory, g.list + 0x78, style) || style < 0 || style > 1) return native;
+    const bool owned = g.mapped && g.bank.owned(request.category, style);
     const int page = g.roots->page_level();
-    if (!owned && !page) return native;
+    if (!owned) {
+        if (page && !requesting_ && !changing_ && !building_ && !collecting_) {
+            Selection before;
+            if (capture(before) && before.group == 1 && before.open &&
+                g.bank.owns(before.category, before.id, before.style, before.list))
+                (void)close_request(before);
+            (void)g.roots->leave();
+        }
+        return native;
+    }
+    if (!context_.state.view().enabled()) return reject;
     if (requesting_ || collecting_ || changing_ || building_ || summary_ || initializing_depth_ ||
         refreshing_depth_ || restoring_ || returning_depth_) return reject;
     const int mode = calls_.mode();
@@ -1169,13 +1180,13 @@ CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& 
     if (request.kind == CategoryRequestKind::song &&
         (request.style != before.style || request.song <= 0 || request.p1 < -1 || request.p1 > 4 ||
          request.p2 < -1 || request.p2 > 4)) return reject;
-    const int level = owned ? CategoryBank::level(request.category) : 0;
-    const bool heading = owned && CategoryBank::part(request.category) == 0;
+    const int level = g.bank.level(request.category);
+    const bool heading = g.bank.part(request.category) == 0;
     const bool heading_only = heading && request.kind == CategoryRequestKind::category;
     const int target = heading && request.kind == CategoryRequestKind::song ? request.category + 1 : request.category;
     if (owned) {
         if (request.kind == CategoryRequestKind::rival) return reject; // Native rival always targets197.
-        const auto& binding = g.bindings[before.style * CategoryBank::per_style + target - CategoryBank::first_id];
+        const auto& binding = g.bindings[before.style * CategoryBank::per_style + target - g.bank.base_id()];
         if (!binding.category) return reject;
         if (!g.bank.owns(binding.category, target, before.style, before.list)) { fault(); return reject; }
         if (request.kind == CategoryRequestKind::song) {
@@ -1206,16 +1217,9 @@ CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& 
     requesting_ = true;
     bool completed{};
     __try {
-        // A hidden LEVEL page does not own the current community/native leaf.
-        // Restoring those hidden vectors needs no filter save, close or reset.
-        if (!owned && before.group != 1) {
-            completed = g.roots->leave() && request_current(before);
-            return completed ? native : reject;
-        }
         if (!close_request(before)) return reject;
-        if (page && (!owned || page != level || before.group != 1))
+        if (page && (page != level || before.group != 1))
             if (!g.roots->leave() || !request_current(before)) return reject;
-        if (!owned) { completed = true; return native; }
         if (before.group != 1) {
             const int group = 1;
             std::memcpy(reinterpret_cast<void*>(before.list + 0x84), &group, sizeof(group));
@@ -1226,7 +1230,7 @@ CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& 
         if (!g.roots->page_level() &&
             (!g.roots->select_parent(level, before.style) || !g.roots->enter(level, before.style))) return reject;
         if (!request_current(before) || g.roots->page_level() != level || !g.roots->page_available(before.style)) return reject;
-        const auto target_category = g.bindings[before.style * CategoryBank::per_style + target - CategoryBank::first_id].category;
+        const auto target_category = g.bindings[before.style * CategoryBank::per_style + target - g.bank.base_id()].category;
         if (!g.bank.owns(target_category, target, before.style, before.list)) return reject;
         if (request.kind == CategoryRequestKind::song) {
             CategoryChartMatch match;
@@ -1254,14 +1258,22 @@ CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& 
 }
 CategoryRequestResult CategoryGenerations::request_checked(const CategoryRequest& request) noexcept {
     try { return route_request(request); }
-    catch (...) { fault(); return {CategoryRequestAction::reject, request.category}; }
+    catch (...) {
+        fault();
+        const bool owned = current_ && current_->mapped && current_->bank.owned(request.category);
+        return {owned ? CategoryRequestAction::reject : CategoryRequestAction::native, request.category};
+    }
 }
 CategoryRequestHooks::Route CategoryGenerations::request_callback() noexcept {
     return [](void* context, const CategoryRequest& request) noexcept {
         auto& self = *static_cast<CategoryGenerations*>(context);
-        if (!self.thread()) return CategoryRequestResult{CategoryRequestAction::reject, request.category};
+        if (!self.thread()) return CategoryRequestResult{CategoryRequestAction::native, request.category};
         __try { return self.request_checked(request); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { self.fault(); return CategoryRequestResult{CategoryRequestAction::reject, request.category}; }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            self.fault();
+            const bool owned = self.current_ && self.current_->mapped && self.current_->bank.owned(request.category);
+            return CategoryRequestResult{owned ? CategoryRequestAction::reject : CategoryRequestAction::native, request.category};
+        }
     };
 }
 CategoryRequestHooks::Failure CategoryGenerations::request_failure_callback() noexcept {

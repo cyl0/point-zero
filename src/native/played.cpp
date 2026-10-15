@@ -90,10 +90,9 @@ void PlayedRenderer::fault() noexcept {
         {reinterpret_cast<const std::uint8_t*>(message.data()), message.size()}); } catch (...) {}
 }
 bool PlayedRenderer::owned(const Owner& owner) const {
-    std::uintptr_t vtable{}; std::uint32_t stream{};
+    std::uint32_t stream{};
     if (owner.retired || !owner.mc || !owner.chart.leaf ||
         calls_.chart.valid(5, owner.chart.stream) < 0 || calls_.chart.valid(6, owner.mc) < 0 ||
-        !read_field(memory_, owner.chart.layer, 0, vtable) || vtable != game_.base + game_bindings(game_).played.layer_vtable ||
         !read_field(memory_, owner.chart.layer, 8, stream) || stream != owner.chart.stream) return false;
     const auto stepup = owner.chart.surface == played_art::Surface::stepup;
     const auto source_owned = [&] {

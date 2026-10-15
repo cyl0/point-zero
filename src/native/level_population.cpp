@@ -30,12 +30,12 @@ void LevelPopulation::prepare() {
     thread_ = GetCurrentThreadId(); prepared_ = true;
 }
 bool LevelPopulation::owner() const noexcept {
-    std::uintptr_t manager{}, list{}, vt{};
+    std::uintptr_t manager{}, list{};
+    const auto rva = game_bindings(game_).level_population.category_manager_rva;
     return pointer(game_.base) && contains(game_.base, game_.size, game_.base, game_.size) &&
-        game_.size >= game_bindings(game_).level_population.category_manager_rva + 8 && pointer(manager_) && pointer(list_) &&
-        read_field(memory_, game_.base, game_bindings(game_).level_population.category_manager_rva, manager) && manager == manager_ &&
-        read_field(memory_, manager_, 0x175D0, list) && list == list_ &&
-        read_field(memory_, list_, 0, vt) && vt == game_.base + game_bindings(game_).level_population.list_vtable_rva;
+        rva <= game_.size && sizeof(manager) <= game_.size - rva && pointer(manager_) && pointer(list_) &&
+        read_field(memory_, game_.base, rva, manager) && manager == manager_ &&
+        read_field(memory_, manager_, 0x175D0, list) && list == list_;
 }
 bool LevelPopulation::source(unsigned index, Source& out) const noexcept {
     const auto style = index / 12;
@@ -80,15 +80,26 @@ bool LevelPopulation::collect() noexcept {
                 !read_field(memory_, n.music, 0x3EC + 5 * style + n.original_p1, raw) || raw != level) return false;
             const ratings::Key key{song, style, n.original_p1};
             const auto* bound = catalog_.find(key);
-            if (!bound || bound->native_level != raw || bound->effective_tenths < 10 ||
-                bound->effective_tenths > 129 || (!bound->assigned && bound->effective_tenths != 10 * raw))
-                return false;
-            charts_[count_++] = {n.music, key, raw, bound->effective_tenths, bound->assigned};
+            const bool assigned = bound && bound->native_level == raw && bound->assigned;
+            const int tenths = assigned ? bound->effective_tenths : 10 * raw;
+            if (tenths < 10 || tenths > 129) return false;
+            charts_[count_++] = {n.music, key, raw, tenths, assigned};
         }
     }
     auto rows = std::span(charts_).first(count_);
     std::sort(rows.begin(), rows.end(), [](const LevelChart& a, const LevelChart& b) { return a.key < b.key; });
-    for (std::size_t i = 1; i < rows.size(); ++i) if (rows[i - 1].key == rows[i].key) return false;
+    std::size_t unique{};
+    for (const auto& row : rows) {
+        if (unique && charts_[unique - 1].key == row.key) {
+            if (charts_[unique - 1] != row) return false;
+        } else charts_[unique++] = row;
+    }
+    count_ = unique;
+    if (!owner()) return false;
+    for (unsigned s = 0; s < sources.size(); ++s) {
+        Source current;
+        if (!source(s, current) || current != sources[s]) return false;
+    }
     return true;
 }
 bool LevelPopulation::capture(std::uintptr_t manager, std::uintptr_t list) noexcept {

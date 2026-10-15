@@ -18,7 +18,6 @@ struct ListNativeCalls {
     int (__fastcall* set_creation_level)(int){};
     std::uintptr_t (__fastcall* emit)(std::uintptr_t, const void*, int, int,
                                     std::uint32_t, std::uint32_t, std::uint32_t){};
-    int (__fastcall* visible)(std::uintptr_t, int){};
 };
 struct ListDraw {
     std::uintptr_t owner{}, return_address{}, manager{};

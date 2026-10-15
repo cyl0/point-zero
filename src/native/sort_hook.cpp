@@ -1,5 +1,5 @@
 #include "sort_hook.hpp"
-#include "inline_patch.hpp"
+#include "call_patch.hpp"
 
 #include <windows.h>
 #include <atomic>
@@ -19,7 +19,7 @@ struct SortHook::State {
     enum class Phase { disabled, enabling, armed, failed };
     static std::atomic<bool> reserved;
     static std::atomic<State*> live;
-    detail::InlinePatch patch;
+    detail::CallPatch patch;
     NativeQSort original;
     void* const context;
     const Callback callback;
@@ -29,7 +29,7 @@ struct SortHook::State {
     DWORD thread{};
     bool retained{};
     State(MemoryView m, const SortHookSite& site, void* opaque, Callback fn)
-        : patch(m, site.address, site.body, reinterpret_cast<std::uintptr_t>(&pz_sort_entry)),
+        : patch(m, site.caller - 5, reinterpret_cast<std::uintptr_t>(&pz_sort_entry)),
           original(reinterpret_cast<NativeQSort>(patch.original())), context(opaque), callback(fn), caller(site.caller) {}
     bool intact() const noexcept {
         return phase.load(std::memory_order_acquire) == Phase::armed && patch.intact();
@@ -72,8 +72,7 @@ SortHook::SortHook(MemoryView memory, const SortHookSite& site, void* context, C
     bool available{};
     require(State::reserved.compare_exchange_strong(available, true), "sort hook process slot already reserved");
     try {
-        require(memory.read && memory.query && callback && !site.body.empty() &&
-                site.body.size() <= UINTPTR_MAX - site.address && site.caller >= 0x10000,
+        require(memory.read && memory.query && callback && site.caller >= 0x10005,
                 "sort hook arguments missing or invalid");
         state_ = new State(memory, site, context, callback);
     } catch (...) { State::reserved.store(false, std::memory_order_release); throw; }

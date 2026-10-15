@@ -99,14 +99,6 @@ struct State {
                         files.read(receipt, 130) == info.sha256 + '\n' + installed.id + '\n') {
                         return std::optional<std::string>{};
                     }
-                    // The checked receipt also identifies a failed package.
-                    // A new ZIP remains discoverable; removing failed.txt is an
-                    // explicit retry of this same native generation.
-                    auto failed = files.read("failed.txt", 128);
-                    if (failed && failed->ends_with('\n')) failed->pop_back();
-                    if (failed && valid_sha256(*failed) &&
-                        files.read(receipt, 130) == info.sha256 + '\n' + *failed + '\n')
-                        return std::optional<std::string>{};
                 } catch (const std::exception&) {} // Optional cache: unreadable is a miss.
                 auto bytes = http.get(downloads + selected->tag + "/point-zero.zip", static_cast<size_t>(info.bytes));
                 if (bytes.size() != info.bytes || digest(bytes, &stop.flag()) != info.sha256)

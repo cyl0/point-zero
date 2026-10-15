@@ -24,14 +24,6 @@ template<class T> bool read(MemoryView m, std::uintptr_t at, T& out) noexcept {
             m.read(m.context, at, std::as_writable_bytes(std::span(&out, 1)));
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
-int parent_level(int id) noexcept {
-    const auto offset = id - CategoryBank::first_id;
-    return id >= CategoryBank::first_id && offset < CategoryBank::per_style && offset % 12 == 0
-        ? 12 - offset / 12 : 0;
-}
-bool leaf(int id) noexcept {
-    return id >= CategoryBank::first_id && id < CategoryBank::first_id + CategoryBank::per_style && !parent_level(id);
-}
 } // namespace
 
 struct CategoryNavigation::State {
@@ -93,12 +85,10 @@ struct CategoryNavigation::State {
         while (value != 1) { users.wait(value, std::memory_order_acquire); value = users.load(std::memory_order_acquire); }
     }
     bool current(CategoryRootOwner expected) const noexcept {
-        std::uintptr_t manager{}, list{}, vt{};
+        std::uintptr_t manager{}, list{};
         return expected.manager >= 0x10000 && expected.list >= 0x10000 && expected.group >= 0x10000 &&
             read(memory, game.base + game_bindings(game).category_navigation.category_manager_rva, manager) && manager == expected.manager &&
-            read(memory, manager + 0x175D0, list) && list == expected.list &&
-            read(memory, list, vt) && vt == game.base + game_bindings(game).category_navigation.list_vtable_rva &&
-            read(memory, expected.group, vt) && vt == game.base + game_bindings(game).category_navigation.level_group_vtable_rva;
+            read(memory, manager + 0x175D0, list) && list == expected.list;
     }
     bool enabled() const noexcept {
         return roots && feature.view().enabled() && roots->state() == CategoryRootsState::published;
@@ -113,13 +103,14 @@ struct CategoryNavigation::State {
         if (busy || nav != navigation || !enabled()) return false;
         if (!current(owner)) return false; // The outer owner will bind the new native list.
         int group{};
-        if (!read(memory, owner.list + 0x84, group)) { return true; }
+        if (!read(memory, owner.list + 0x84, group)) return false;
         if (group != 1) return false;
         CategoryRootSelection before;
         std::uint8_t open{};
-        if (!roots->selection(before) || !read(memory, nav + 5, open) || open > 1) { return true; }
+        if (!roots->selection(before) || !read(memory, nav + 5, open) || open > 1) return false;
         if (before.open || open || roots->page_level()) return false;
-        const int level = parent_level(before.id);
+        const int level = roots->owns(before.category, before.id, before.style) && roots->part(before.id, before.style) == 0
+            ? roots->level(before.id, before.style) : 0;
         if (!level) return false;
         busy = true;
         __try {
@@ -133,7 +124,8 @@ struct CategoryNavigation::State {
             if (!roots->enter(level, style)) return false;
             CategoryRootSelection entered;
             if (!closed(entered) || entered.style != style ||
-                entered.id <= CategoryBank::id(level, 0) || entered.id > CategoryBank::id(level, 11)) return false;
+                !roots->owns(entered.category, entered.id, style) || roots->level(entered.id, style) != level ||
+                roots->part(entered.id, style) <= 0) return false;
             if (sound) calls.sound(0x2C80);
             return true;
         } catch (...) { return false; }
@@ -213,30 +205,15 @@ struct CategoryNavigation::State {
         try { return exact_checked(selected, song, p1, p2); }
         catch (...) { return false; }
     }
-    bool native_category(std::uintptr_t category) const noexcept {
-        // CategoryRoots' canonical native identity: two inline banks of 230
-        // categories at manager+10h, stride D0h. Private bank allocations and
-        // Playlister categories are outside this exact native-slot contract.
-        constexpr std::size_t count = 230;
-        constexpr std::size_t stride = sizeof(category_layout::Category);
-        constexpr std::size_t bytes = 2 * count * stride;
-        if (owner.manager > UINTPTR_MAX - 16 - bytes) return false;
-        const auto first = owner.manager + 16;
-        if (!contains(first, bytes, category, stride) || (category - first) % stride) return false;
-        int id{};
-        return read(memory, category, id) && id == static_cast<int>((category - first) / stride % count);
-    }
     bool exact_custom(std::uintptr_t category, int song, int p1, int p2, std::uint8_t& result) noexcept {
         if (!enabled() || !current(owner)) return false;
-        // Proven native inline objects cannot be owned private leaves. Forward
-        // them even if the current LEVEL heading/selection cannot be read.
-        if (native_category(category)) return false;
         int group{};
         CategoryRootSelection selected;
-        if (!read(memory, owner.list + 0x84, group)) { return true; }
+        if (!read(memory, owner.list + 0x84, group)) return false;
         if (group != 1) return false;
-        if (!roots->selection(selected)) { return true; }
-        if (selected.category != category || !leaf(selected.id)) return false;
+        if (!roots->selection(selected)) return false;
+        if (selected.category != category || !roots->owns(category, selected.id, selected.style) ||
+            roots->part(selected.id, selected.style) <= 0) return false;
         result = 0;
         if (busy || song <= 0 || p1 < -1 || p1 > 4 || p2 < -1 || p2 > 4) return true;
         busy = true;

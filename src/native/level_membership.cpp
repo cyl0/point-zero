@@ -21,7 +21,7 @@ bool LevelMembership::build(std::span<const LevelChart> input) noexcept {
     std::array<std::size_t, 2> styles{};
     for (std::size_t i = 0; i < input.size(); ++i) {
         const auto& c = input[i];
-        if (c.music < 0x10000 || (c.music & 7) || c.key.song <= 0 ||
+        if (c.music < 0x10000 || (c.music & 7) || c.music > UINTPTR_MAX - 0x680 || c.key.song <= 0 ||
             c.key.style < 0 || c.key.style > 1 || c.key.difficulty < 0 || c.key.difficulty > 4 ||
             c.native_level < 1 || c.native_level > 12 || c.effective_tenths < 10 || c.effective_tenths > 129 ||
             (!c.assigned && c.effective_tenths != c.native_level * 10) ||

@@ -82,5 +82,17 @@ bool read_bytes(MemoryView memory, std::uintptr_t address, std::span<std::byte> 
     return memory.read && range(memory, address, out.size(), nullptr, {}) &&
         memory.read(memory.context, address, out);
 }
+bool callable_range(MemoryView memory, std::uintptr_t address, std::size_t length) noexcept {
+    if (!range(memory, address, length, nullptr, {})) return false;
+    const auto end = address + length;
+    for (auto cursor = address; cursor < end;) {
+        MemoryRegion region{};
+        if (!memory.query(memory.context, cursor, region) ||
+            !contains(region.begin, region.size, cursor, 1) || !region.executable) return false;
+        const auto next = region.begin + region.size;
+        cursor = next < end ? next : end;
+    }
+    return true;
+}
 MemoryView current_process_memory() noexcept { return {nullptr, copy_process, query_process}; }
 } // namespace point_zero::native

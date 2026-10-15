@@ -2,35 +2,22 @@
 
 #include "memory.hpp"
 #include <array>
-#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace point_zero::native {
 struct ImageDirectory { std::uint32_t rva{}, size{}; };
 struct ImageInfo {
     ImageRange range;
-    // Import/export metadata is validated; other entries are copied for fixtures.
     std::array<ImageDirectory, 16> directories{};
     std::uint32_t timestamp{}, entry_rva{};
 };
 
-// Only reads the selected loaded PE64 image. Malformed/inaccessible/changing
-// identity, bounds or import/export metadata throw; section descriptions and
-// unselected directory contents are not admission requirements.
 ImageInfo inspect_image(MemoryView, std::uintptr_t base);
 
-struct ImportReference {
-    std::string provider, name;
-    std::optional<std::uint16_t> ordinal;
-    std::uintptr_t slot{}, target{};
-};
-ImportReference inspect_import(MemoryView, const ImageInfo&, std::uint32_t slot_rva);
-struct ExportReference {
-    std::uintptr_t address{};
-    std::string forwarder; // Nonempty: address denotes this string, not executable code.
-};
-ExportReference inspect_export(MemoryView, const ImageInfo&, std::uint16_t ordinal);
+std::uintptr_t resolve_export(MemoryView, const ImageInfo&, std::uint16_t ordinal);
+std::vector<std::byte> read_code(MemoryView, ImageRange, std::uint32_t rva, std::size_t size);
 
 // Holds an existing module load reference; never loads a new file or runs its
 // entry point. Keep the lease until every owned native callback has retired.

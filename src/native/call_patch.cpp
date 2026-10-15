@@ -30,9 +30,14 @@ bool code_is(MemoryView memory, std::uintptr_t address, std::span<const std::byt
         std::equal(expected.begin(), expected.end(), observed.begin());
 }
 }
-CallPatch::CallPatch(MemoryView memory, std::uintptr_t site, std::uintptr_t callee,
-                     std::uintptr_t destination) : memory_(memory), site_(site), original_(callee) {
-    before_ = call(site, callee);
+CallPatch::CallPatch(MemoryView memory, std::uintptr_t site,
+                     std::uintptr_t destination) : memory_(memory), site_(site) {
+    require(callable_range(memory, site, before_.size()) && read_bytes(memory, site, before_) &&
+            before_[0] == std::byte{0xe8}, "call hook requires a direct CALL");
+    std::int32_t displacement{};
+    std::memcpy(&displacement, before_.data() + 1, sizeof(displacement));
+    original_ = static_cast<std::uintptr_t>(site + 5 + displacement);
+    require(callable_range(memory, original_), "call hook original target unavailable");
     require(destination >= 0x10000, "call hook destination missing");
     auto allocation = safetyhook::Allocator::global()->allocate_near(
         {reinterpret_cast<std::uint8_t*>(site)}, bridge_.size(), 0x7fff0000);

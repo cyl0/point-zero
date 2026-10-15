@@ -282,8 +282,6 @@ struct Startup::Impl : std::enable_shared_from_this<Impl> {
         updated = offered;
         check_stop();
         transaction->activate(*inputs);
-        // Finish request construction before recording a native attempt. No
-        // allocating path conversion belongs after the durable checkpoint.
         const auto runtime = utf8(options.runtime), generation = utf8(transaction->selected().directory);
         const PZ_InitializeRequest request{sizeof(request), bytes(runtime), bytes(generation), this, completion, host};
         char message[1024]{};
@@ -292,13 +290,6 @@ struct Startup::Impl : std::enable_shared_from_this<Impl> {
         if (!phase.compare_exchange_strong(expected, native_begun, std::memory_order_acq_rel))
             throw std::runtime_error("startup cancelled");
         // This is the serialized point after which disposal/retry is forbidden.
-        try { transaction->enter_native(); }
-        catch (...) {
-            // A checkpoint failure prevented the native call. Preserve a stop
-            // that arrived meanwhile, but do not claim native entry occurred.
-            phase.fetch_and(~native_begun, std::memory_order_acq_rel);
-            throw;
-        }
         core->entered = true;
         const auto result = core->api->initialize_prepared(&core->prepared, &request, {message, sizeof(message)});
         message[sizeof(message) - 1] = '\0';

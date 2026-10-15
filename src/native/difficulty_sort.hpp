@@ -18,8 +18,8 @@ struct SortRequest {
 };
 struct SortOwnedCategory {
     void* context{};
-    // The final browsing owner verifies only its own retained categories.
-    // Called again before/after publication. Never infer ownership from an ID.
+    // Identifies retained PZ categories for revalidation across the native call.
+    // A false result does not exclude a foreign category from sorting.
     bool (*verify)(void*, std::uintptr_t category, int id, int style,
                    std::uintptr_t list) noexcept{};
 };
@@ -35,12 +35,11 @@ public:
     // One preparation attempt, on the future sorting thread, before publication.
     // Reserve all scratch storage now; sort never allocates or performs file I/O.
     void prepare();
-    // True means handled (including uncertainty after attempting a native write).
-    // False leaves the original qsort call to the hook exactly once. The native
-    // original is used on PRIVATE bars first to capture its actual tie order.
+    // True means the original was called on the actual bars exactly once.
+    // False leaves that call to the hook. Unknown ratings preserve native order.
     // effective is the published policy during normal browsing, or the target
     // of the caller's serialized refresh. Do not publish it before that whole
-    // operation completes. Native ownership/mode checks still apply.
+    // operation completes. Native request/layout/mode checks still apply.
     bool sort(const SortRequest&, NativeQSort original, bool effective) noexcept;
 
 private:
@@ -65,9 +64,8 @@ private:
     std::vector<std::uint32_t> chart_entries_;
     std::vector<category_layout::Bar> before_, work_;
     std::uint32_t thread_{};
-    bool attempted_{}, prepared_{}, busy_{}, write_attempted_{};
+    bool attempted_{}, prepared_{}, busy_{}, native_started_{};
     bool observe(Context&) const;
-    bool owns(const SortRequest&, const category_layout::Category&, const Context&) const;
     bool run(const SortRequest&, NativeQSort);
     std::atomic_flag warned_{};
     void fault() noexcept;

@@ -132,7 +132,8 @@ bool AssetOwner::read_slot(std::uintptr_t address, Identity& out) const noexcept
     return true;
 }
 AssetResult AssetOwner::fail(AssetError error) noexcept {
-    state_ = AssetState::failed;
+    if (uncertain_ || (error != AssetError::collision && error != AssetError::load_failed))
+        state_ = AssetState::failed;
     return {error, 0};
 }
 std::size_t AssetOwner::owned_count() const noexcept {
@@ -289,8 +290,10 @@ AssetResult AssetOwner::mark_published() noexcept {
     Operation operation(*this);
     if (operation.error != AssetError::none) return {operation.error};
     if (state_ != AssetState::collecting) return {AssetError::invalid_state};
-    if (leases_.size() != families_.size()) return fail(AssetError::incomplete);
     for (auto& lease : leases_) {
+        if (std::none_of(families_.begin(), families_.end(), [&](const Family& family) {
+                return family.loaded && matches(lease.identity.name, family.name);
+            })) continue;
         Identity current;
         if (!read_slot(lease.slot, current)) return fail(AssetError::unreadable);
         if (!same_resource(lease.identity, current) || current.state != 2 || current.refs < 1) {

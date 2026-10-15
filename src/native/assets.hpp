@@ -64,9 +64,8 @@ public:
 
     AssetResult load(std::string_view family) noexcept;
     AssetResult rollback() noexcept;
-    // Call BEFORE exposing any handle/child/stream to native consumers. Requires
-    // all configured families loaded. Irreversible here: retirement is separate
-    // integration work. Published owners cannot load or release, even at shutdown.
+    // Commit successfully loaded families before exposing their resources.
+    // Published owners retain all leases and cannot load or release them.
     AssetResult mark_published() noexcept;
 
     AssetState state() const noexcept { return state_; }

@@ -23,8 +23,8 @@ struct LevelChart {
 class LevelPopulation final {
 public:
     static constexpr std::size_t style_limit = 20000;
-    // Catalogue is immutable for this owner's lifetime. Capture resolves it
-    // once per capture, with freshly validated manager/list ownership.
+    // Uncatalogued or changed charts retain their validated live native level.
+    // Catalogue assignments apply only when the captured native level agrees.
     LevelPopulation(MemoryView, ImageRange game, const Catalog&);
     LevelPopulation(const LevelPopulation&) = delete;
     LevelPopulation& operator=(const LevelPopulation&) = delete;
@@ -43,6 +43,7 @@ private:
     struct Source {
         int id{}, count{}, inserted{};
         category_layout::Vector charts;
+        bool operator==(const Source&) const = default;
     };
     MemoryView memory_;
     ImageRange game_;

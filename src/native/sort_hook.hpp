@@ -4,8 +4,6 @@
 
 namespace point_zero::native {
 struct SortHookSite {
-    std::uintptr_t address{};
-    std::vector<std::byte> body; // Complete expected displaced qsort instructions.
     std::uintptr_t caller{}; // Native dispatcher return; other calls forward.
 };
 class SortHook final {

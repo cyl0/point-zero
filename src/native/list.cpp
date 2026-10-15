@@ -56,7 +56,7 @@ ListRenderer::ListRenderer(const AdapterContext& context, ListNativeCalls calls)
     if (!calls.chart.player_count || !calls.chart.style || !calls.chart.active_player ||
         !calls.valid || !calls.package ||
         !calls.image_info || !calls.arguments || !calls.creation_level || !calls.set_creation_level ||
-        !calls.emit || !calls.visible)
+        !calls.emit)
         throw std::invalid_argument("incomplete admitted list native calls");
 }
 void ListRenderer::fault() noexcept {
@@ -102,20 +102,24 @@ bool ListRenderer::preload(std::uintptr_t slot) noexcept {
     __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 bool ListRenderer::hide(std::span<const Submitted> submitted, int expected_pool_count) {
-    int count{}; std::uintptr_t method{};
-    if (!read_field(memory_, game_.base + game_bindings(game_).list.pool_rva, pool_count, count) || count != expected_pool_count ||
-        !read_field(memory_, game_.base + game_bindings(game_).list.sprite_vtable, 0x28, method) ||
-        method != reinterpret_cast<std::uintptr_t>(calls_.visible)) return false;
+    int count{};
+    if (!read_field(memory_, game_.base + game_bindings(game_).list.pool_rva, pool_count, count) ||
+        count != expected_pool_count) return false;
     // Validate the whole known set before asking the native visibility method
     // to hide any part. Never act on a recycled handle or an unexpected pointer.
     for (const auto& part : submitted) {
-        std::uintptr_t vt{}; std::uint32_t stream{}; int root{};
-        if (!read_field(memory_, part.sprite, 0, vt) || vt != game_.base + game_bindings(game_).list.sprite_vtable ||
-            !read_field(memory_, part.sprite, 8, stream) || stream != part.stream ||
+        std::uint32_t stream{}; int root{};
+        if (!read_field(memory_, part.sprite, 8, stream) || stream != part.stream ||
             !read_field(memory_, part.sprite, 0x210, root) || root != part.root ||
             calls_.valid(5, stream) < 0 || calls_.valid(6, root) < 0) return false;
     }
-    for (const auto& part : submitted) if (calls_.visible(part.sprite, 0)) return false;
+    for (const auto& part : submitted) {
+        std::uintptr_t table{}, method{};
+        if (!read_field(memory_, part.sprite, 0, table) || !read_field(memory_, table, 0x28, method) ||
+            !callable_range(memory_, method)) return false;
+        using Visible = int (__fastcall*)(std::uintptr_t, int);
+        if (reinterpret_cast<Visible>(method)(part.sprite, 0)) return false;
+    }
     return read_field(memory_, game_.base + game_bindings(game_).list.pool_rva, pool_count, count) && count == expected_pool_count;
 }
 bool ListRenderer::emit_parts(const ListDraw& request, const Image* const* images,
@@ -134,9 +138,9 @@ bool ListRenderer::emit_parts(const ListDraw& request, const Image* const* image
         const auto sprite = calls_.emit(request.manager, images[i]->args.data(), x, y,
                                         request.alpha, request.layer, request.flags);
         const auto expected = request.manager + pool_slots + sprite_size * static_cast<unsigned>(before + i);
-        std::uintptr_t vt{}; std::uint32_t stream{}; int root{}, current_count{};
-        if (sprite != expected || !read_field(memory_, sprite, 0, vt) || vt != game_.base + game_bindings(game_).list.sprite_vtable ||
-            !read_field(memory_, sprite, 8, stream) || !stream || !read_field(memory_, sprite, 0x210, root) || root < 0 ||
+        std::uint32_t stream{}; int root{}, current_count{};
+        if (sprite != expected || !read_field(memory_, sprite, 8, stream) || !stream ||
+            !read_field(memory_, sprite, 0x210, root) || root < 0 ||
             !read_field(memory_, request.manager, pool_count, current_count) || current_count != before + i + 1 ||
             calls_.valid(5, stream) < 0 || calls_.valid(6, root) < 0) { correct = false; break; }
         submitted[owned++] = {sprite, stream, root};

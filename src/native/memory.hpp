@@ -48,4 +48,5 @@ template<class T> bool read_field(MemoryView memory, std::uintptr_t address,
                     std::as_writable_bytes(std::span(&value, 1)));
 }
 MemoryView current_process_memory() noexcept;
+bool callable_range(MemoryView, std::uintptr_t address, std::size_t length = 1) noexcept;
 } // namespace point_zero::native

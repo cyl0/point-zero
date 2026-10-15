@@ -9,12 +9,6 @@
 
 namespace point_zero::native {
 namespace {
-// Retained LDJ2026081900: formatted boot text helper [5EB470,5EB50C).
-// Capture [93F629,93F63C) in boot draw [93F430,93F655), after OmniFix's
-// separate 93F5C4 capture. Displace only the nine-byte stack argument MOV;
-// the following footer CALL stays in native code with native unwind coverage.
-
-
 constexpr std::array capture{
     std::byte{0x48}, std::byte{0xC7}, std::byte{0x44}, std::byte{0x24}, std::byte{0x20},
     std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{0xE8},
@@ -39,10 +33,8 @@ auto code(MemoryView memory, ImageRange image) {
 
 std::atomic<BootText*> BootText::owner_{};
 
-// Native loop [93F494,93F5C4): eight rows from y112 in 32-pixel steps.
-// OmniFix's setup_boot_text_hook uses the next row, y368, when loaded.
 BootText::BootText(MemoryView memory, ImageRange game, std::string version)
-    : row_y_(112 + (GetModuleHandleW(L"omnifix.dll") ? 9 : 8) * 32),
+    : row_y_(400),
       version_(std::move(version)) {
     require(!version_.empty(), "boot text release version unavailable");
     require(game.base >= 0x10000 && contains(game.base, game.size, game.base, game.size) &&
@@ -69,8 +61,6 @@ void BootText::draw(safetyhook::Context&) noexcept {
 }
 
 void BootText::render() noexcept {
-    // Cached native row: y368 alone, y400 after OmniFix; columns stay native.
-    // No lookups, allocation, I/O, hashing or shared-state mutation per frame.
     __try {
         render_(1, 60, row_y_, &color_, "POINT ZERO");
         render_(1, 300, row_y_, &color_, ":<color 00ffffff>%s</color>", version_.c_str());

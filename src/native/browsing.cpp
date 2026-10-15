@@ -35,12 +35,12 @@ Admission admit(const AdapterContext& context) {
     const auto& modules = context.modules;
     const auto& game = modules.game;
     Admission out;
-    out.metadata = admit_category_metadata_contract(memory, game, modules.playlister);
-    out.accessors = admit_category_accessors_contract(memory, game, modules.playlister);
+    out.metadata = admit_category_metadata_contract(memory, game);
+    out.accessors = admit_category_accessors_contract(memory, game);
     out.summary = admit_category_summary_contract(memory, game);
     out.navigation = admit_category_navigation_contract(memory, game);
-    out.lifecycle = admit_category_lifecycle_contract(memory, game, modules.playlister);
-    out.requests = admit_category_request_sites(memory, game, modules.fervidex);
+    out.lifecycle = admit_category_lifecycle_contract(memory, game);
+    out.requests = admit_category_request_sites(memory, game);
     out.sort = admit_sort_contract(memory, game);
     out.filter = admit_filter_contract(memory, game);
     auto& calls = out.calls;
@@ -88,8 +88,8 @@ void NativeBrowsing::prepare(std::span<const CategoryMetadataEntry> definitions)
     std::array<int, CategoryBank::per_style> ids{};
     require(definitions.size() == ids.size(), "incomplete private LEVEL definitions");
     for (std::size_t n = 0; n < ids.size(); ++n) {
-        ids[n] = CategoryBank::first_id + static_cast<int>(n);
-        require(definitions[n].id == ids[n] && definitions[n].definition.difficulty_locked == 1,
+        ids[n] = definitions[n].id;
+        require(definitions[n].definition.difficulty_locked == 1,
                 "invalid private LEVEL definition identity or difficulty policy");
     }
     // Every finite contract succeeds before constructing even disabled hooks.
@@ -116,7 +116,7 @@ void NativeBrowsing::prepare(std::span<const CategoryMetadataEntry> definitions)
     sorter_->prepare();
     filter_hooks_ = std::make_unique<FilterHooks>(memory, checked.filter.sites, this, filter_callbacks());
     sort_hook_ = std::make_unique<SortHook>(memory, checked.sort.hook, this, sort_callback());
-    summary_ = std::make_unique<CategorySummary>(memory, checked.summary, ids,
+    summary_ = std::make_unique<CategorySummary>(memory, checked.summary,
         generations_.get(), CategoryGenerations::summary_callbacks());
     requests_ = std::make_unique<CategoryRequestHooks>(memory, checked.requests, generations_.get(),
         CategoryGenerations::request_callback(), CategoryGenerations::request_failure_callback());

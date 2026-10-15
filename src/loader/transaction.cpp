@@ -249,7 +249,6 @@ struct Transaction::Impl {
             // leave only this staging hint. It is never activation authority.
             if (files.read("pending.txt", 128)) { (void)pointer("pending.txt"); files.erase("pending.txt"); }
             files.erase("fallback.txt");
-            files.erase("native-attempt.txt");
             files.erase("recovery-manifest.json");
             return;
         }
@@ -275,11 +274,6 @@ struct Transaction::Impl {
         const auto current_registry = files.read("managed.json", manifest_limit);
         require(current_registry && (*current_registry == tx.old_registry || *current_registry == serialize(after)), "journal registry state mismatch");
         note("recovery_validated"); // Everything above completes before first mutation.
-        if (files.read("native-attempt.txt", 128)) {
-            require(pointer("native-attempt.txt") == tx.candidate, "native attempt generation mismatch");
-            files.put("failed.txt", tx.candidate + "\n");
-            note("candidate_quarantined");
-        }
         for (const auto& w : tx.writes) {
             if (w.before) files.put(w.target, *w.before);
             else if (!files.erase_if_matches(w.target, w.after_hash)) {
@@ -293,7 +287,6 @@ struct Transaction::Impl {
         files.erase("pending.txt"); note("recovery_pending");
         files.erase("journal.json"); note("recovery_complete");
         files.erase("fallback.txt");
-        files.erase("native-attempt.txt");
         files.erase("recovery-manifest.json");
     }
 };
@@ -317,10 +310,6 @@ void Transaction::begin() {
 }
 bool Transaction::offer(std::string_view id, Channel requested, std::uint32_t game_major) {
     require(impl_->installed && !impl_->activated && !impl_->offered && !impl_->terminal, "offer outside pre-native selection");
-    if (impl_->files.read("failed.txt", 128) && impl_->pointer("failed.txt") == id) {
-        impl_->note("candidate_suppressed");
-        return false;
-    }
     auto next = impl_->admit(id, true);
     if (!select_update(impl_->installed->release, next->release, requested, game_major)) return false;
     const auto tracked = impl_->files.read("managed.json", manifest_limit);
@@ -417,53 +406,28 @@ void Transaction::activate(InputSnapshot& inputs) {
     s.files.put("active.txt", tx.candidate + "\n");
     s.activated = true; s.note("pointer_published");
 }
-void Transaction::enter_native() {
-    auto& s = *impl_;
-    require(s.activated && !s.terminal, "native entry outside activated transaction");
-    if (s.offered) {
-        // Entry has won Startup's cancellation boundary. Keep this small durable
-        // checkpoint independent of a stop arriving before the native call.
-        Files metadata(s.files.root());
-        metadata.put("native-attempt.txt", s.offered->release.id + "\n");
-        s.note("native_attempted");
-    }
-}
 void Transaction::finish(bool admitted, bool cancelled) {
     auto& s = *impl_;
     require(s.activated && !s.terminal, "terminal admission outside activated transaction");
     s.terminal = true;
     if (!admitted) {
-        Files metadata(s.files.root());
-        if (cancelled) metadata.erase("native-attempt.txt");
-        else if (s.offered) metadata.put("failed.txt", s.offered->release.id + "\n");
         s.note(cancelled ? "native_cancelled" : "native_rejected");
         return;
     }
-    try {
-        s.note("before_ack");
-        require(s.pointer("active.txt") == selected().release.id, "active pointer changed before ACK");
-        if (s.offered) {
-            require(s.files.read("journal.json", journal_limit) == s.journal_bytes, "journal changed before ACK");
-            require(s.files.read("managed.json", manifest_limit) == s.registry_after, "registry changed before ACK");
-            for (const auto& artifact : s.offered->release.files) {
-                if (artifact.role != Role::ratings) continue;
-                const auto bytes = s.files.read(artifact.target, data_limit);
-                require(bytes && digest(*bytes, s.cancelled) == artifact.sha256, "managed bytes changed before ACK");
-            }
-            s.files.rename("journal.json", "previous.json"); s.note("journal_acknowledged");
-            s.files.erase("pending.txt"); s.note("pending_cleared");
-            s.files.erase("fallback.txt");
-            s.files.erase("native-attempt.txt");
-            s.files.erase("recovery-manifest.json");
+    s.note("before_ack");
+    require(s.pointer("active.txt") == selected().release.id, "active pointer changed before ACK");
+    if (s.offered) {
+        require(s.files.read("journal.json", journal_limit) == s.journal_bytes, "journal changed before ACK");
+        require(s.files.read("managed.json", manifest_limit) == s.registry_after, "registry changed before ACK");
+        for (const auto& artifact : s.offered->release.files) {
+            if (artifact.role != Role::ratings) continue;
+            const auto bytes = s.files.read(artifact.target, data_limit);
+            require(bytes && digest(*bytes, s.cancelled) == artifact.sha256, "managed bytes changed before ACK");
         }
-    } catch (...) {
-        // Keep hashing/I/O cancellable. Once native admission succeeded, a
-        // cancellation-aborted ACK must not be mistaken for native rejection.
-        if (s.cancelled && s.cancelled->load(std::memory_order_relaxed)) {
-            try { Files metadata(s.files.root()); metadata.erase("native-attempt.txt"); }
-            catch (...) { s.note("cancel_checkpoint_retained"); }
-        }
-        throw;
+        s.files.rename("journal.json", "previous.json"); s.note("journal_acknowledged");
+        s.files.erase("pending.txt"); s.note("pending_cleared");
+        s.files.erase("fallback.txt");
+        s.files.erase("recovery-manifest.json");
     }
     // ACK is durable; keep selection/pins and registry_before for replacements().
     std::string{}.swap(s.journal_bytes);

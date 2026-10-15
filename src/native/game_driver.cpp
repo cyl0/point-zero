@@ -3,7 +3,6 @@
 #include "adapters.hpp"
 #include "assets.hpp"
 #include "asset_contract.hpp"
-#include "avs_read.hpp"
 #include "catalog_contract.hpp"
 #include "catalog_hook.hpp"
 #include "boot_text.hpp"
@@ -48,17 +47,13 @@ public:
             " reported_datecode=" + setup.host.avs.datecode;
         setup.host.log(setup.host.context, PZ_LOG_INFO,
             {reinterpret_cast<const std::uint8_t*>(identity_note.data()), identity_note.size()});
-        modules_.avs = hold(L"avs2-core.dll");
         modules_.afp = hold(L"afp-core.dll");
         modules_.utils = hold(L"afp-utils.dll");
-        modules_.playlister = optional(L"playlister.dll");
-        modules_.fervidex = optional(L"fervidex.dll");
     }
 
     void install(Observer observer, void* context) override {
         require(!hook_ && observer, "catalogue startup installation already attempted or invalid");
         initial_ = check_catalog_contract(memory_, modules_.game.range);
-        check_read();
         std::uint8_t graphics{};
         require(read_value(memory_, modules_.game.range.base + game_bindings(modules_.game.range).game_driver.graphics_started_rva, graphics) && graphics == 0,
                 "game graphics startup already entered; late installation refused");
@@ -73,10 +68,8 @@ public:
                     {reinterpret_cast<const std::uint8_t*>(message.data()), message.size()});
             }
         }
-        // Independent retained entry bytes, not a copy of live code. Foreign
-        // edits admitted elsewhere in the function remain outside this prefix.
-        constexpr std::array prefix{std::byte{0x40}, std::byte{0x53}, std::byte{0x48},
-                                    std::byte{0x83}, std::byte{0xec}, std::byte{0x30}};
+        const auto prefix = read_code(memory_, modules_.game.range,
+            game_bindings(modules_.game.range).catalog_contract.catalog_load_rva, 32);
         hook_ = std::make_unique<CatalogHook>(memory_, initial_.load, prefix, context, observer);
         arming_started_ = true;
         hook_->arm();
@@ -98,28 +91,29 @@ public:
     void activate(const Catalog& catalog) override {
         preparing();
         require(!adapters_ && !assets_, "native adapters already prepared");
-        const auto asset_calls = admit_asset_calls(memory_, modules_.game, modules_.utils, modules_.avs);
         adapters_ = make_native_adapters({modules_, memory_, catalog, state_, setup_.host});
         require(adapters_ != nullptr, "required native adapters unavailable");
         adapters_->prepare();
         const auto families = adapters_->asset_families();
-        require(!families.empty(), "required native asset family set is empty");
-        assets_ = std::make_unique<AssetOwner>(prefix_, families,
-            asset_calls, memory_);
         std::vector<LoadedAsset> loaded;
         loaded.reserve(families.size());
-        for (const auto family : families) {
-            preparing();
-            const auto asset = assets_->load(family);
-            require(static_cast<bool>(asset), "required private native asset failed to load");
-            loaded.push_back({family, asset.slot});
+        try {
+            const auto calls = admit_asset_calls(memory_, modules_.game);
+            assets_ = std::make_unique<AssetOwner>(prefix_, families, calls, memory_);
+            for (const auto family : families) {
+                preparing();
+                const auto asset = assets_->load(family);
+                if (asset) loaded.push_back({family, asset.slot});
+                else warning(std::string("asset unavailable: ") + std::string(family));
+            }
+        } catch (const std::exception& e) {
+            warning(std::string("assets unavailable: ") + e.what());
         }
         preparing();
         adapters_->activate(loaded);
         preparing();
-        require(static_cast<bool>(assets_->mark_published()), "private assets could not be committed");
-        // The owner publishes the one FeatureState, then signals terminal
-        // admission. Catalogue success cannot skip these adapter/resource steps.
+        if (assets_ && !loaded.empty())
+            require(static_cast<bool>(assets_->mark_published()), "private assets could not be committed");
     }
 
     bool rollback() noexcept override {
@@ -163,15 +157,12 @@ private:
         leases_.emplace_back(name);
         return leases_.back().image();
     }
-    std::optional<ImageInfo> optional(const wchar_t* name) {
-        if (!GetModuleHandleW(name)) return {};
-        return hold(name);
+    void warning(const std::string& message) const {
+        setup_.host.log(setup_.host.context, PZ_LOG_WARNING,
+            {reinterpret_cast<const std::uint8_t*>(message.data()), message.size()});
     }
     void preparing() const {
         require(state_.view().phase == FeaturePhase::preparing, "native admission stopped before publication");
-    }
-    void check_read() const {
-        check_avs_read_contract(memory_, modules_.game, modules_.avs);
     }
 };
 } // namespace

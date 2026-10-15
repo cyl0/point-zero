@@ -121,7 +121,7 @@ bool run(MemoryView memory, const CategoryBadgeCalls& calls, std::uintptr_t mana
         auto& e = entries[i];
         e.binding = input[i];
         const auto& b = e.binding;
-        if (b.id < 230 || b.id >= 1000 || b.style < 0 || b.style > 1 || ++counts[b.style] > 144 ||
+        if (b.id < 230 || b.style < 0 || b.style > 1 || ++counts[b.style] > 144 ||
             (i && (input[i - 1].style > b.style || (input[i - 1].style == b.style && input[i - 1].id >= b.id))) ||
             !shape(memory, e) || e.count > row_limit - total) return false;
         e.first = total; total += e.count;

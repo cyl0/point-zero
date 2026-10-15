@@ -5,7 +5,6 @@
 
 namespace point_zero::native {
 struct ListHookSite {
-    std::uintptr_t address{};
     // Exact return addresses for background, paired P1/P2 and solo badge calls.
     // Other shared-image calls remain untouched.
     std::array<std::uintptr_t, 4> callers{};
@@ -23,8 +22,6 @@ public:
         std::uintptr_t manager, const char* name, int x, int y,
         std::uint32_t alpha, std::uint32_t layer, std::uint32_t flags,
         std::uintptr_t& result) noexcept;
-    // Background names are bounded local copies. Badge names preserve the
-    // original native pointer for live table identity; consumers validate it.
 
     // Creates disabled and checks displaced instructions and the owned bridge.
     ListHook(MemoryView, const ListHookSite&, void* context, Callback);

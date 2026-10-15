@@ -30,9 +30,8 @@ std::vector<std::byte> code(MemoryView memory, ImageRange game, Pin pin) {
             "native guide range outside selected game");
     const auto at = game.base + pin.rva;
     std::vector<std::byte> bytes(pin.size);
-    require(readable_range(memory, at, bytes.size(), RangeUse::image_code, game) &&
+    require(callable_range(memory, at, bytes.size()) &&
             read_bytes(memory, at, bytes) &&
-            readable_range(memory, at, bytes.size(), RangeUse::image_code, game) &&
             (pin.rva != game_bindings(game).guide.capture.rva || ratings::sha256({reinterpret_cast<const char*>(bytes.data()), bytes.size()}) == pin.sha),
             "native guide code changed");
     return bytes;
@@ -40,8 +39,7 @@ std::vector<std::byte> code(MemoryView memory, ImageRange game, Pin pin) {
 
 void executable(MemoryView memory, ImageRange game, Pin pin) {
     require(game.base >= 0x10000 && contains(game.base, game.size, game.base, game.size) &&
-            pin.rva <= game.size && pin.size <= game.size - pin.rva &&
-            readable_range(memory, game.base + pin.rva, pin.size, RangeUse::image_code, game),
+            pin.rva < game.size && callable_range(memory, game.base + pin.rva),
             "native guide call range outside executable game image");
 }
 
@@ -105,8 +103,6 @@ struct NativeGuide::State {
           browsing(owner), art(calls),
           build_caller(context.modules.game.range.base + game_bindings(context.modules.game.range).guide.guide_build_caller_rva),
           create_call(context.modules.game.range.base + game_bindings(context.modules.game.range).guide.guide_create_call_rva) {
-        executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.factory);
-        executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.renderer);
         executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.copy_string);
         executable(context.memory, context.modules.game.range, game_bindings(context.modules.game.range).guide.grow_vector);
         for (const auto name : names)

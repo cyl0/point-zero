@@ -26,17 +26,15 @@ bool find_level_group(MemoryView, ImageRange, std::uintptr_t list, std::uintptr_
 // serialized native mutations. No hooks or input polling.
 class CategoryRoots final {
 public:
-    using Lookup = std::uintptr_t (__fastcall*)(std::uintptr_t manager, int id, int style);
-    CategoryRoots(MemoryView, ImageRange game, CategoryVectorCalls, Lookup);
+    CategoryRoots(MemoryView, ImageRange game, CategoryVectorCalls);
     ~CategoryRoots() noexcept; // No native cleanup; retains any uncertain ownership.
     CategoryRoots(const CategoryRoots&) = delete;
     CategoryRoots& operator=(const CategoryRoots&) = delete;
 
     // One attempt; bindings is the complete current ready CategoryBank table.
-    // Native lookup/code and category ownership must already be admitted. Build
-    // both game-allocated custom vectors before changing the group. Native
-    // integer parents are replaced in ascending level order; other canonical
-    // native/Playlister rows retain their relative order and identity.
+    // Native vector code and category ownership must already be admitted. Build
+    // both game-allocated custom vectors before changing the group. Replace exact
+    // native LEVEL rows where bank parents exist; preserve every foreign row.
     bool prepare(std::uintptr_t manager, std::uintptr_t list, std::uintptr_t group,
                  std::span<const CategoryAccessBinding> bindings) noexcept;
     bool publish() noexcept; // Revalidate both native roots/cursors, then replace.
@@ -51,16 +49,22 @@ public:
     bool select_parent(int level, int style) noexcept;
     // At a closed native LEVEL heading. style is the current native selector;
     // its cursor must select this parent. Prepare ALL/nonempty decimal children
-    // for both styles before replacing either root vector. An absent counterpart
-    // is empty; the navigation owner must leave before switching to that style.
+    // for both styles before replacing either root vector. Foreign rows remain
+    // visible; the navigation owner leaves before switching to a style without
+    // this bank's children.
     // This only changes vectors/cursors: caller performs native navigation/sound.
     bool enter(int level, int style) noexcept;
-    // Restore both parent vectors/cursors, remembering each selected child ID.
+    // Restore parents, retaining current foreign rows and selected child IDs.
     // Call before external category requests or native population. No-op if the
     // published group already shows roots. Does not refresh/replay song preview.
     bool leave() noexcept;
     int page_level() const noexcept; // Zero when closed/unavailable.
     bool page_available(int style) const noexcept;
+    // Dynamic bank IDs; level/part require a populated binding in this style.
+    int id(int level, int part) const noexcept;
+    int level(int id, int style) const noexcept;
+    int part(int id, int style) const noexcept;
+    bool owns(std::uintptr_t category, int id, int style) const noexcept;
     CategoryRootOwner owner() const noexcept; // Preparing thread only; not lifetime proof.
     bool current() const noexcept; // Published group still belongs to the current native list.
     // Read-only current LEVEL heading/leaf identity, on the preparing thread.
@@ -68,10 +72,8 @@ public:
     // mutation; enter/leave still validate their complete ownership separately.
     bool selection(CategoryRootSelection&) const noexcept;
     // At a safe native boundary with no vector iterators retained elsewhere.
-    // Preserve canonical noninteger native/Playlister appends, including native
-    // reallocation, before restoring native roots and freeing custom vectors.
-    // Closes an open child page first. An appended integer LEVEL requires the
-    // owner's population rebuild.
+    // Replace bank parents with their original native LEVEL rows where present,
+    // preserving current foreign membership/order. Closes a child page first.
     bool withdraw() noexcept;
     // Immediately BEFORE the actual native group destructor. Leave its current
     // visible vectors to that destructor; free only our hidden vectors. Caller

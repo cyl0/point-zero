@@ -33,15 +33,12 @@ struct CategoryRequestSite {
 struct CategoryRequestSites {
     std::array<CategoryRequestSite, 3> entries; // category609280, song6094A0, rival6098C0.
     std::uintptr_t manager_getter{}; // Admitted no-throw leaf883280, displaced CALL target.
-    // Selected immutable image leases. An absent Fervidex range means no foreign
-    // edit is allowed. Present permits only its verified, nonoverlapping mid
-    // chain during explicit integrity checks, including installation after arm.
-    ImageRange game{}, fervidex{};
+    ImageRange game{};
 };
 
 // Three captures AFTER native consumption/eligibility and BEFORE native group
 // references. No additional request queue, mailbox consumption or entry hook.
-// Caller admits complete native/known foreign chains and owns the enclosing
+// Caller owns the enclosing
 // scene transaction. It must retain banks through the full native continuation
 // and drain that enclosing lifecycle before destroying the browsing owner.
 class CategoryRequestHooks final {

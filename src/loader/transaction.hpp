@@ -37,7 +37,6 @@ public:
     InputSnapshot::Replacements replacements() const;
     void discard_offer(); // only before activation/native initialization
     void activate(InputSnapshot& prepared_inputs);
-    void enter_native(); // durable checkpoint immediately before native entry
     void finish(bool native_admitted, bool cancelled = false); // false retains recovery journal
 
 private:

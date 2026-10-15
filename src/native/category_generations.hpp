@@ -13,7 +13,7 @@ struct CategoryGenerationCalls {
     CategoryBankCalls bank;
     CategoryBadgeCalls badges;
     CategoryVectorCalls vectors;
-    CategoryRoots::Lookup lookup{};
+    CategoryBank::Lookup lookup{};
     int (__fastcall* mode)(){};
     int (__fastcall* style)(){}; // 949570, requested normalized native style.
     std::uintptr_t (__fastcall* options)(){}; // 8854A0.
@@ -98,7 +98,6 @@ private:
     std::vector<std::unique_ptr<Generation>> generations_;
     std::vector<Graph> graphs_;
     Generation* current_{}, *building_{}, *summary_{};
-    std::array<CategoryAccessBinding, 2 * CategoryBank::per_style> empty_{};
     std::uint32_t thread_{};
     unsigned depth_{}, initializing_depth_{};
     bool initialization_ready_{};

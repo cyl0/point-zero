@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 
@@ -15,8 +16,6 @@
 
 namespace point_zero::native {
 namespace {
-constexpr std::array title_entry{
-    std::byte{0x40}, std::byte{0x55}, std::byte{0x53}, std::byte{0x56}, std::byte{0x57}};
 constexpr std::array title_limit{
     std::byte{0x0f}, std::byte{0x2f}, std::byte{0xc1}, std::byte{0x76}, std::byte{0x10}};
 static_assert(sizeof(std::uintptr_t) == 8 && list_art::title_delta == 24);
@@ -48,7 +47,7 @@ struct ListTitleHook::State {
     bool retained{};
 
     State(MemoryView view, const ListTitleSite& site, void* opaque, Permit callback)
-        : entry(view, site.address, std::span(site.body).first(title_entry.size()),
+        : entry(view, site.address, std::span(site.body).first(32),
                 reinterpret_cast<std::uintptr_t>(&title_thunk)),
           limit(view, site.address + site.limit_offset, &width),
           original(reinterpret_cast<Title>(entry.original())), context(opaque),
@@ -112,8 +111,9 @@ struct ListTitleHook::State {
         // This decision belongs to the entered native title, not to the current
         // admission gate. No callback, native query or new policy check here.
         const auto* const current = scope;
-        if (current && current->custom && ctx.rsi == current->owner)
-            ctx.xmm1.f32[0] = 486.0f;
+        if (current && current->custom && ctx.rsi == current->owner &&
+            std::isfinite(ctx.xmm1.f32[0]) && ctx.xmm1.f32[0] > list_art::title_delta)
+            ctx.xmm1.f32[0] -= list_art::title_delta;
     }
 };
 std::atomic<bool> ListTitleHook::State::reserved{};
@@ -125,17 +125,16 @@ ListTitleHook::ListTitleHook(MemoryView memory, const ListTitleSite& site, void*
     require(State::reserved.compare_exchange_strong(available, true), "title hook process slot already reserved");
     try {
         require(memory.read && memory.query && permit && site.address >= 0x10000 &&
-                site.body.size() >= title_entry.size() + title_limit.size() &&
+                site.body.size() >= 32 + title_limit.size() &&
                 site.body.size() <= UINTPTR_MAX - site.address &&
-                site.limit_offset >= title_entry.size() && site.limit_offset <= site.body.size() &&
+                site.limit_offset >= 32 && site.limit_offset <= site.body.size() &&
                 // Both the fallthrough and JBE target must remain in the
                 // complete admitted body, not just the five patched bytes.
                 21 < site.body.size() - site.limit_offset,
                 "title hook arguments missing or invalid");
         require(site.caller >= 0x10000, "title hook caller is absent");
-        require(std::equal(title_entry.begin(), title_entry.end(), site.body.begin()) &&
-                std::equal(title_limit.begin(), title_limit.end(), site.body.begin() + site.limit_offset),
-                "title hook entry or width instructions mismatch");
+        require(std::equal(title_limit.begin(), title_limit.end(), site.body.begin() + site.limit_offset),
+                "title width instructions mismatch");
         // Validate the complete original before constructing either disabled
         // hook. An injected view cannot vouch for different live native code.
         state_ = new State(memory, site, context, permit);

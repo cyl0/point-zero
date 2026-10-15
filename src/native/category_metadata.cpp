@@ -1,4 +1,6 @@
 #include "category_metadata.hpp"
+#include "category_accessors.hpp"
+#include "category_bank.hpp"
 #include "inline_patch.hpp"
 
 #include <algorithm>
@@ -24,7 +26,7 @@ std::vector<OwnedDefinition> copy_definitions(std::span<const CategoryMetadataEn
     std::vector<OwnedDefinition> result(input.size());
     for (std::size_t i = 0; i < input.size(); ++i) {
         const auto& source = input[i];
-        require(source.id >= 230 && source.id < 1000 && (!i || input[i - 1].id < source.id) &&
+        require(source.id >= 230 && (!i || input[i - 1].id < source.id) &&
                 source.definition.difficulty_locked == 1, "private category definition ID/order/lock invalid");
         auto& out = result[i];
         out.id = source.id; out.value = source.definition; out.value.capacity = 0;
@@ -63,10 +65,10 @@ struct CategoryMetadata::State {
     }
     static const CategoryDefinition* __fastcall dispatch(std::uintptr_t manager, int id) {
         auto& self = *live.load(std::memory_order_acquire);
-        if (const auto* definition = self.find(id)) {
-            if (const auto* constructing = CategoryStorage::active_definition(manager, id)) return constructing;
-            return definition;
-        }
+        if (const auto* constructing = CategoryStorage::active_definition(manager, id)) return constructing;
+        if (const auto* constructing = CategoryBank::active_definition(manager, id)) return constructing;
+        const int index = CategoryAccessors::definition_index(manager, id);
+        if (index >= 0 && static_cast<std::size_t>(index) < self.definitions.size()) return &self.definitions[index].value;
         return self.original(manager, id);
     }
     bool intact() const noexcept { return phase == Phase::armed && patch.intact(); }

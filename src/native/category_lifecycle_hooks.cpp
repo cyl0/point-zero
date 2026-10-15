@@ -77,7 +77,7 @@ struct CategoryLifecycleHooks::State {
         for (std::size_t n = 0; n < count; ++n) {
             if (n == static_cast<std::size_t>(CategoryLifeEvent::initialize))
                 initialize_patch = std::make_unique<detail::CallPatch>(m, initialize_caller - 5,
-                    sites.entries[n].address, targets[n]);
+                    targets[n]);
             else
                 patches[n] = std::make_unique<detail::InlinePatch>(m, sites.entries[n].address, sites.entries[n].body, targets[n]);
         }

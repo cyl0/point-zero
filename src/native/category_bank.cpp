@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <climits>
 #include <stdexcept>
 
 namespace point_zero::native {
@@ -25,13 +26,14 @@ bool same(const CategorySummaryRequest& a, const CategorySummaryRequest& b) noex
 bool same(const CategorySummaryBinding& a, const CategorySummaryBinding& b) noexcept {
     return a.category == b.category && a.summary == b.summary;
 }
-int index(int id, int style) noexcept {
-    return id >= CategoryBank::first_id && id < CategoryBank::first_id + CategoryBank::per_style &&
-        style >= 0 && style < 2 ? style * CategoryBank::per_style + id - CategoryBank::first_id : -1;
+int index(int id, int style, int first) noexcept {
+    return id >= first && id - first < CategoryBank::per_style &&
+        style >= 0 && style < 2 ? style * CategoryBank::per_style + id - first : -1;
 }
 } // namespace
 
 struct CategoryBank::Backing {
+    static thread_local Backing* constructing;
     struct Summary {
         std::array<std::uint64_t, 2> before{guard, guard};
         std::array<std::byte, 168> bytes{};
@@ -55,6 +57,7 @@ struct CategoryBank::Backing {
     std::array<std::array<int, 2>, 24> preferences{};
     std::array<std::size_t, count> member_counts{};
     std::uintptr_t manager{}, list{};
+    int first{};
     CategoryBankState state{CategoryBankState::empty};
     bool native_started{};
     int calculating{-1}, active{-1};
@@ -62,10 +65,10 @@ struct CategoryBank::Backing {
     CategorySummaryRequest request{};
     CategorySummaryBinding binding{};
 
-    Backing(MemoryView m, CategoryNativeCalls storage, CategoryBankCalls c, CategoryBadgeCalls b)
-        : memory(m), storage_calls(storage), calls(c), badges(b) {
+    Backing(MemoryView m, CategoryNativeCalls storage, CategoryBankCalls c, CategoryBadgeCalls b, int first)
+        : memory(m), storage_calls(storage), calls(c), badges(b), first(first) {
         for (std::size_t n = 0; n < count; ++n) {
-            bindings[n] = {first_id + static_cast<int>(n % per_style), static_cast<int>(n / per_style), 0, 0};
+            bindings[n] = {first + static_cast<int>(n % per_style), static_cast<int>(n / per_style), 0, 0};
         }
     }
     const std::array<int, 2>& preference(std::size_t n) const noexcept {
@@ -95,6 +98,8 @@ struct CategoryBank::Backing {
 
 };
 
+thread_local CategoryBank::Backing* CategoryBank::Backing::constructing{};
+
 CategoryBank::CategoryBank(MemoryView memory, CategoryNativeCalls storage, CategoryBankCalls calls,
                           CategoryBadgeCalls badges, std::span<const CategoryMetadataEntry> definitions) {
     if (!memory.read || !memory.query || !storage.construct || !storage.initialize || !storage.assign_string ||
@@ -104,9 +109,10 @@ CategoryBank::CategoryBank(MemoryView memory, CategoryNativeCalls storage, Categ
         !badges.weekly || !badges.recommend || !badges.shop || !badges.kac || definitions.size() != per_style)
         throw std::invalid_argument("incomplete native category bank dependencies");
     for (std::size_t n = 0; n < definitions.size(); ++n)
-        if (definitions[n].id != first_id + static_cast<int>(n) || definitions[n].definition.difficulty_locked != 1)
+        if (definitions.front().id < 230 || definitions.front().id > INT_MAX - per_style - 230 ||
+            definitions[n].id != definitions.front().id + static_cast<int>(n) || definitions[n].definition.difficulty_locked != 1)
             throw std::invalid_argument("invalid native category bank definitions");
-    backing_ = std::make_unique<Backing>(memory, storage, calls, badges);
+    backing_ = std::make_unique<Backing>(memory, storage, calls, badges, definitions.front().id);
     for (std::size_t n = 0; n < definitions.size(); ++n) backing_->definitions[n] = definitions[n].definition;
 }
 CategoryBank::~CategoryBank() noexcept {
@@ -118,10 +124,27 @@ CategoryBank::~CategoryBank() noexcept {
         }))
         (void)backing_.release();
 }
-bool CategoryBank::build_native(std::uintptr_t manager, std::uintptr_t list, LevelPopulation& population) {
+bool CategoryBank::build_native(std::uintptr_t manager, std::uintptr_t list, LevelPopulation& population, Lookup lookup) {
     auto& b = *backing_;
     b.state = CategoryBankState::rejected;
-    if (!pointer(manager, 0x2A428) || !pointer(list)) return false;
+    if (!pointer(manager, 0x2A428) || !pointer(list) || !lookup) return false;
+    int first = first_id;
+    for (int n = 0; n < per_style;) {
+        if (first > INT_MAX - per_style - 230) return false;
+        const int id = first + n;
+        bool occupied{};
+        for (int style = 0; style < 2; ++style) {
+            const auto category = lookup(manager, id, style);
+            int actual{};
+            if (category && !read(b.memory, category, actual)) return false;
+            occupied = occupied || (category && actual == id);
+        }
+        if (occupied) { first = id + 1; n = 0; }
+        else ++n;
+    }
+    b.first = first;
+    for (std::size_t n = 0; n < b.bindings.size(); ++n)
+        b.bindings[n].id = first + static_cast<int>(n % per_style);
     b.manager = manager; b.list = list;
     if (!population.capture(manager, list)) return false;
     const auto charts = population.charts();
@@ -175,20 +198,22 @@ bool CategoryBank::build_native(std::uintptr_t manager, std::uintptr_t list, Lev
     b.state = CategoryBankState::ready;
     return true;
 }
-bool CategoryBank::build_checked(std::uintptr_t manager, std::uintptr_t list, LevelPopulation& population) noexcept {
-    try { return build_native(manager, list, population); }
+bool CategoryBank::build_checked(std::uintptr_t manager, std::uintptr_t list, LevelPopulation& population, Lookup lookup) noexcept {
+    try { return build_native(manager, list, population, lookup); }
     catch (...) { backing_->state = backing_->native_started ? CategoryBankState::uncertain : CategoryBankState::rejected; return false; }
 }
-bool CategoryBank::build(std::uintptr_t manager, std::uintptr_t list, LevelPopulation& population) noexcept {
+bool CategoryBank::build(std::uintptr_t manager, std::uintptr_t list, LevelPopulation& population, Lookup lookup) noexcept {
     if (attempted_ || busy_ || backing_->state != CategoryBankState::empty) return false;
     attempted_ = true; busy_ = true; thread_ = GetCurrentThreadId();
+    auto* const previous = Backing::constructing;
+    Backing::constructing = backing_.get();
     bool result{};
     __try {
-        __try { result = build_checked(manager, list, population); }
+        __try { result = build_checked(manager, list, population, lookup); }
         __except (EXCEPTION_EXECUTE_HANDLER) {
             backing_->state = backing_->native_started ? CategoryBankState::uncertain : CategoryBankState::rejected;
         }
-    } __finally { backing_->calculating = -1; backing_->active = -1; busy_ = false; }
+    } __finally { Backing::constructing = previous; backing_->calculating = -1; backing_->active = -1; busy_ = false; }
     return result;
 }
 bool CategoryBank::reset_rejected() noexcept {
@@ -198,7 +223,7 @@ bool CategoryBank::reset_rejected() noexcept {
         // Replace private construction state as a unit, rather than changing
         // only the state enum or weakening the one-attempt build boundary.
         auto replacement = std::make_unique<Backing>(backing_->memory, backing_->storage_calls,
-                                                     backing_->calls, backing_->badges);
+                                                     backing_->calls, backing_->badges, backing_->first);
         replacement->definitions = backing_->definitions;
         backing_ = std::move(replacement);
         attempted_ = false;
@@ -239,16 +264,36 @@ std::span<const CategoryAccessBinding> CategoryBank::bindings() const noexcept {
     return !busy_ && backing_->state == CategoryBankState::ready && thread_ == GetCurrentThreadId()
         ? std::span<const CategoryAccessBinding>(backing_->bindings) : std::span<const CategoryAccessBinding>{};
 }
+const CategoryDefinition* CategoryBank::active_definition(std::uintptr_t manager, int id) noexcept {
+    const auto* b = Backing::constructing;
+    if (!b || b->manager != manager || id < b->first || id - b->first >= per_style) return nullptr;
+    const auto local = static_cast<std::size_t>(id - b->first);
+    return b->bindings[local].category || b->bindings[per_style + local].category ? &b->definitions[local] : nullptr;
+}
+int CategoryBank::base_id() const noexcept { return backing_->first; }
+bool CategoryBank::owned(int id, int style) const noexcept {
+    const auto& b = *backing_;
+    if (id < b.first || id - b.first >= per_style) return false;
+    const auto local = static_cast<std::size_t>(id - b.first);
+    if (style == -1) return b.bindings[local].category || b.bindings[per_style + local].category;
+    return style >= 0 && style < 2 && b.bindings[style * per_style + local].category;
+}
+int CategoryBank::level(int id) const noexcept { return owned(id) ? 12 - (id - base_id()) / 12 : 0; }
+int CategoryBank::part(int id) const noexcept { return owned(id) ? (id - base_id()) % 12 : -1; }
+int CategoryBank::id(int level, int part) const noexcept {
+    return level >= 1 && level <= 12 && part >= 0 && part < 12
+        ? base_id() + (12 - level) * 12 + part : -1;
+}
 bool CategoryBank::owns(std::uintptr_t category, int id, int style, std::uintptr_t list) const noexcept {
     const auto& b = *backing_;
-    const auto n = index(id, style);
+    const auto n = index(id, style, b.first);
     Category c;
     return !busy_ && b.state == CategoryBankState::ready && thread_ == GetCurrentThreadId() &&
         list == b.list && n >= 0 && b.bindings[n].category == category && b.identity(n, c);
 }
 bool CategoryBank::prepare_summary(const CategorySummaryRequest& request, CategorySummaryBinding& binding) noexcept {
     auto& b = *backing_;
-    const auto n = index(request.id, request.style);
+    const auto n = index(request.id, request.style, b.first);
     Category c;
     if (thread_ != GetCurrentThreadId() || n < 0 || request.manager != b.manager || b.active != -1 ||
         (b.state != CategoryBankState::ready && !(busy_ && b.state == CategoryBankState::rejected && b.calculating == n)) ||

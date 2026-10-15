@@ -21,7 +21,6 @@ struct Invocation {
 static_assert(offsetof(Invocation, manager) == 8 && offsetof(Invocation, style) == 16 &&
               offsetof(Invocation, id) == 20 && offsetof(Invocation, entry_rsp) == 24);
 extern "C" std::intptr_t pz_category_summary_invoke(Invocation*) noexcept(false);
-constexpr std::array prologue{std::byte{0x48}, std::byte{0x89}, std::byte{0x5c}, std::byte{0x24}, std::byte{0x20}};
 constexpr std::array bind{std::byte{0x4c}, std::byte{0x89}, std::byte{0x74}, std::byte{0x24}, std::byte{0x38}};
 constexpr std::array cancel{std::byte{0x48}, std::byte{0x8b}, std::byte{0x4c}, std::byte{0x24}, std::byte{0x68}};
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
@@ -34,7 +33,7 @@ bool valid(const CategorySummaryBinding& b) noexcept {
 }
 bool valid(const CategorySummaryRequest& r) noexcept {
     return r.style >= 0 && r.style <= 1 &&
-        buffer(r.manager, 0x17618 + 168 * (230 + 999) + 8);
+        r.id >= 0 && buffer(r.manager, 0x2A428);
 }
 template<std::size_t N> bool bytes_at(const CategorySummarySite& s, std::uintptr_t at,
                                      const std::array<std::byte, N>& expected) noexcept {
@@ -66,7 +65,6 @@ struct CategorySummary::State {
     static std::atomic<State*> live;
     static constinit thread_local Scope* scope;
     const std::uintptr_t cancel_address;
-    const std::vector<int> ids;
     detail::InlinePatch entry;
     detail::PlayedMidPatch capture;
     const NativeCalculate original;
@@ -77,15 +75,12 @@ struct CategorySummary::State {
     DWORD thread{};
     bool retained{};
 
-    State(MemoryView m, const CategorySummarySite& s, std::span<const int> selected, void* c, Callbacks calls)
-        : cancel_address(s.cancel), ids(selected.begin(), selected.end()),
-          entry(m, s.address, std::span(s.body).first(5), reinterpret_cast<std::uintptr_t>(&dispatch)),
+    State(MemoryView m, const CategorySummarySite& s, void* c, Callbacks calls)
+        : cancel_address(s.cancel),
+          entry(m, s.address, s.body, reinterpret_cast<std::uintptr_t>(&dispatch)),
           capture(m, s.capture, std::span(s.body).subspan(s.capture - s.address, 5), on_capture),
           original(reinterpret_cast<NativeCalculate>(entry.original())), context(c), callbacks(calls) {
         require(before_intact(), "category summary changed during construction");
-    }
-    bool owns(int id) const noexcept {
-        return id >= ids.front() && id <= ids.back() && std::binary_search(ids.begin(), ids.end(), id);
     }
     bool before_intact() const noexcept {
         return entry.before_intact() && capture.before_intact();
@@ -146,16 +141,15 @@ struct CategorySummary::State {
         const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
         bool entered{}, prepared{}, completed{}, observed{};
         __try {
-            if (!self.owns(id)) {
-                if (id >= 0 && id < 230 && self.callbacks.native_finish && valid(request))
-                    observed = entered = self.enter();
+            entered = valid(request) && self.enter();
+            if (entered) prepared = self.callbacks.prepare(self.context, request, current.binding);
+            if (!prepared) {
+                observed = entered && id < 230 && self.callbacks.native_finish;
                 const auto result = self.original(manager, style, id);
                 completed = true;
                 return result;
             }
-            if (!valid(request) || !(entered = self.enter())) return 0;
-            prepared = self.callbacks.prepare(self.context, request, current.binding);
-            if (!prepared || !valid(current.binding)) return 0;
+            if (!valid(current.binding)) return 0;
             current.invocation = {self.original, manager, style, id};
             current.state = &self;
             const auto result = pz_category_summary_invoke(&current.invocation);
@@ -175,20 +169,17 @@ std::atomic<bool> CategorySummary::State::reserved{};
 std::atomic<CategorySummary::State*> CategorySummary::State::live{};
 constinit thread_local CategorySummary::State::Scope* CategorySummary::State::scope{};
 
-CategorySummary::CategorySummary(MemoryView memory, const CategorySummarySite& site, std::span<const int> ids,
+CategorySummary::CategorySummary(MemoryView memory, const CategorySummarySite& site,
                                  void* context, Callbacks callbacks) {
     bool available{};
     require(State::reserved.compare_exchange_strong(available, true), "category summary process slot already reserved");
     try {
         require(memory.read && memory.query && context && callbacks.prepare && callbacks.finish &&
                 site.address >= 0x10000 && site.body.size() <= UINTPTR_MAX - site.address &&
-                bytes_at(site, site.address, prologue) && bytes_at(site, site.capture, bind) &&
+                !site.body.empty() && bytes_at(site, site.capture, bind) &&
                 bytes_at(site, site.cancel, cancel) && site.capture >= site.address + 5 && site.cancel >= site.capture + 5,
                 "category summary dependencies/body sites invalid");
-        require(!ids.empty() && ids.size() <= 144, "category summary private IDs missing or excessive");
-        for (std::size_t i = 0; i < ids.size(); ++i)
-            require(ids[i] >= 230 && ids[i] < 1000 && (!i || ids[i - 1] < ids[i]), "category summary IDs invalid/unordered");
-        state_ = new State(memory, site, ids, context, callbacks);
+        state_ = new State(memory, site, context, callbacks);
     } catch (...) { State::reserved.store(false, std::memory_order_release); throw; }
 }
 CategorySummary::~CategorySummary() noexcept {

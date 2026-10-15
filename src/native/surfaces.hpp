@@ -7,9 +7,6 @@
 #include "surface_hooks.hpp"
 
 namespace point_zero::native {
-// The fixed surface part of the final native adapter. It does not publish the
-// feature, own/release packages, or substitute for required browsing/mode work.
-// Modules, catalogue, shared state and host wrapper outlive this object.
 class NativeSurfaces final {
 public:
     static constexpr std::array families{CupRenderer::family, ListRenderer::family, PlayedRenderer::family};
@@ -21,16 +18,11 @@ public:
     NativeSurfaces(NativeSurfaces&&) = delete;
     NativeSurfaces& operator=(NativeSurfaces&&) = delete;
 
-    // One attempt on the initialization/native thread. Admit all selected
-    // surface calls/sites, construct renderers and create disabled hooks.
     void prepare();
     static std::span<const std::string_view> asset_families() noexcept;
-    // Same thread, still preparing. The span may also contain other adapters'
-    // packages. Require each surface family exactly once with distinct slots;
-    // preload all artwork, then arm every hook.
     void activate(std::span<const LoadedAsset>);
-    // Fixed adapter path: distinct nonzero slots already resolved by family.
     void activate(const AssetSlots&);
+    bool available() const noexcept;
     // At the serialized prepublication boundary, including after another
     // component arms. This only checks owned hook integrity, not readiness.
     bool intact() const noexcept;
@@ -57,6 +49,7 @@ private:
     std::array<ArmState, 4> arms_{};
     std::uint32_t thread_{};
     bool prepare_attempted_{}, prepared_{}, activation_attempted_{}, retired_{};
+    bool cup_ready_{}, played_ready_{};
 
     void preparing() const;
     void begin_activation();

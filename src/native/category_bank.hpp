@@ -13,21 +13,16 @@ struct CategoryBankCalls {
 };
 enum class CategoryBankState { empty, ready, rejected, destroyed, uncertain };
 
-// One ordinary LEVEL generation, owning both styles and their summaries.
-// Fixed IDs, no registry: each level descending12..1 has parent, ALL, .0..9.
-// Missing membership has no category; parents and ALL have independent native
-// allocations. Definitions/art strings must come from the retained metadata
-// owner. Code admission and that owner's installed routing are prerequisites.
 class CategoryBank final {
 public:
+    using Lookup = std::uintptr_t (__fastcall*)(std::uintptr_t, int, int);
     static constexpr int first_id = 500, per_style = 144;
-    static constexpr bool owned(int id) noexcept { return id >= first_id && id < first_id + per_style; }
-    static constexpr int level(int id) noexcept { return owned(id) ? 12 - (id - first_id) / 12 : 0; }
-    static constexpr int part(int id) noexcept { return owned(id) ? (id - first_id) % 12 : -1; }
-    static constexpr int id(int level, int part) noexcept {
-        return level >= 1 && level <= 12 && part >= 0 && part < 12
-            ? first_id + (12 - level) * 12 + part : -1;
-    }
+    static const CategoryDefinition* active_definition(std::uintptr_t manager, int id) noexcept;
+    int base_id() const noexcept;
+    bool owned(int id, int style = -1) const noexcept;
+    int level(int id) const noexcept;
+    int part(int id) const noexcept;
+    int id(int level, int part) const noexcept;
     // Allocates only the bank table; slots/membership wait until build and are
     // sized from the captured population. Calls no game code. definitions has the
     // exact144 ascending IDs with locked difficulty and retained art strings.
@@ -42,7 +37,7 @@ public:
     // Capture both native banks; construct, summarize, restore native preferences,
     // TITLE-sort visible rows and prepare optional badges from the captured source.
     // This does not publish groups, bind accessors or commit FeatureState.
-    bool build(std::uintptr_t manager, std::uintptr_t list, LevelPopulation&) noexcept;
+    bool build(std::uintptr_t manager, std::uintptr_t list, LevelPopulation&, Lookup) noexcept;
     // Retry only a rejection before the first native storage call. No exposed
     // slot or uncertain construction may be reset this way.
     bool reset_rejected() noexcept;
@@ -69,8 +64,8 @@ private:
     std::unique_ptr<Backing> backing_;
     bool attempted_{}, busy_{};
     std::uint32_t thread_{};
-    bool build_native(std::uintptr_t, std::uintptr_t, LevelPopulation&);
-    bool build_checked(std::uintptr_t, std::uintptr_t, LevelPopulation&) noexcept;
+    bool build_native(std::uintptr_t, std::uintptr_t, LevelPopulation&, Lookup);
+    bool build_checked(std::uintptr_t, std::uintptr_t, LevelPopulation&, Lookup) noexcept;
     bool destroy_checked() noexcept;
 };
 } // namespace point_zero::native

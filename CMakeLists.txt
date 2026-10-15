@@ -49,7 +49,7 @@ target_link_libraries(point_zero_native_catalog PUBLIC point_zero_ratings point_
 target_compile_definitions(point_zero_native_catalog PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 point_zero_warnings(point_zero_native_catalog)
 
-add_library(point_zero_native_contract STATIC src/native/catalog_contract.cpp src/native/avs_read.cpp)
+add_library(point_zero_native_contract STATIC src/native/catalog_contract.cpp)
 target_link_libraries(point_zero_native_contract PUBLIC point_zero_native_catalog point_zero_native_memory)
 point_zero_warnings(point_zero_native_contract)
 
@@ -169,7 +169,7 @@ target_compile_definitions(point_zero_native_browsing PRIVATE WIN32_LEAN_AND_MEA
 point_zero_warnings(point_zero_native_browsing)
 
 add_library(point_zero_native_folders STATIC src/native/folder_definitions.cpp
-    src/native/folder_art.cpp src/native/folder_contract.cpp src/native/folder_art_contract.cpp)
+    src/native/folder_art.cpp src/native/folder_art_contract.cpp)
 target_include_directories(point_zero_native_folders PUBLIC include src)
 target_link_libraries(point_zero_native_folders PUBLIC point_zero_native_catalog
     point_zero_native_memory point_zero_native_state)
