@@ -72,21 +72,26 @@ Plan make(Surface surface, int difficulty, int tenths) noexcept {
                       {pi, 1, left + ww + gap + whole_kern + dm.dx, baseline + dm.dy},
                       {fi, 1, left + ww + gap + dm.advance + gap + whole_kern + fraction_kern + fm.dx,
                        baseline + fm.dy}}};
+    } else if (surface == Surface::result) {
+        const float bearing = detail::result_left_bearing[difficulty][whole >= 10];
+        const float dw = static_cast<float>(d.width);
+        out.width = ww - bearing + dw + static_cast<float>(f.width);
+        out.extends_result_plate = out.width > 200;
+        const float extension = out.extends_result_plate ? out.width - 200 : 0;
+        const float left = std::round((200 - extension - out.width) / 2 - bearing);
+        out.parts = {{{wi, 1, left, 0},
+                      {pi, 1, left + ww, 21.f - static_cast<float>(d.height)},
+                      {fi, 1, left + ww + dw, static_cast<float>(f.y)}}};
     } else {
-        // Keep native padding/size; kern only HUD 7's open diagonal and .7's
-        // lower-left bearing. Result widths and plate behavior stay retained.
         // Limit the combined HUD 7.7 tuck to 7px: its upper bars still need
         // clearance (2px at alpha >=64 in the retained native raster).
-        const float whole_kern = surface == Surface::hud && whole == 7 ? -4.f : 0.f;
-        const float fraction_kern = surface == Surface::hud && fraction == 7 ? -3.f : 0.f;
+        const float whole_kern = whole == 7 ? -4.f : 0.f;
+        const float fraction_kern = fraction == 7 ? -3.f : 0.f;
         const float dw = static_cast<float>(d.width);
         out.width = ww + dw + static_cast<float>(f.width) + whole_kern + fraction_kern;
-        out.extends_result_plate = surface == Surface::result && out.width > 200;
-        const float left = surface == Surface::hud ? static_cast<float>(w.x) :
-            (out.extends_result_plate ? 200 - out.width : 0);
-        const float baseline = surface == Surface::hud ? 19.0f : 21.0f;
-        out.parts = {{{wi, 1, left, surface == Surface::hud ? static_cast<float>(w.y) : 0},
-                      {pi, 1, left + ww + whole_kern, baseline - static_cast<float>(d.height)},
+        const float left = static_cast<float>(w.x);
+        out.parts = {{{wi, 1, left, static_cast<float>(w.y)},
+                      {pi, 1, left + ww + whole_kern, 19.f - static_cast<float>(d.height)},
                       {fi, 1, left + ww + dw + whole_kern + fraction_kern, static_cast<float>(f.y)}}};
     }
     out.count = 3;

@@ -28,6 +28,7 @@ namespace point_zero::native::played_art::detail {
 inline constexpr int family_images = 23;
 inline constexpr int hud_begin = 5 * family_images;
 inline constexpr int result_begin = hud_begin + 14;
+inline constexpr float result_left_bearing[5][2]{{27, 27}, {34, 34}, {45, 45}, {28, 25}, {4, 0}};
 inline constexpr Image image_table[] = {
     // Confirmation, family 0.
     {"ps_decide_diff_b01", 36, 71, 26, 7},
