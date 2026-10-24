@@ -263,7 +263,7 @@ struct Http::Impl {
 #ifdef POINT_ZERO_TEST_HTTP_LOOPBACK
         access = WINHTTP_ACCESS_TYPE_NO_PROXY;
 #endif
-        session.value = WinHttpOpen(L"POINT ZERO/33", access, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC);
+        session.value = WinHttpOpen(L"POINT ZERO", access, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC);
         if (!session.value) failure("WinHTTP session");
         if (!WinHttpSetTimeouts(session.value, static_cast<int>(t.connect_ms), static_cast<int>(t.connect_ms),
                                 static_cast<int>(t.headers_ms), static_cast<int>(t.body_idle_ms))) failure("WinHTTP timeouts");

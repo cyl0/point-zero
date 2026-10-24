@@ -6,19 +6,6 @@
 #include <array>
 
 namespace point_zero::native {
-// Ephemeral observation on the native song-select thread. These pointers must
-// not be retained across native calls, input, or a scene transition.
-struct Selection {
-    std::uintptr_t data{}, list{}, group{}, category{}, chart{}, music{};
-    int group_id{}, category_cursor{}, bar_cursor{}, song_id{}, style{}, difficulty{};
-    bool operator==(const Selection&) const = default;
-};
-
-// LDJ2026081900 only. Call after the selected core has admitted the menu code
-// and layouts. No scan, allocation, native calls or writes. False is ordinary
-// native fallback (folder/header/transition/unknown owner), not feature failure.
-bool read_selection(MemoryView, ImageRange game, Selection&) noexcept;
-
 struct CupValues {
     int song_id{}, style{};
     // Borrowed from the process-retained immutable catalogue. A missing chart
@@ -26,8 +13,17 @@ struct CupValues {
     // still distinct from an integer effective value; consumers use FeatureState.
     std::array<const CatalogRow*, 5> charts{};
 };
-// Resolves all five cups together, traversing the selected native list once.
-// The two native music caches, working difficulty and cup values must agree.
-bool read_cup_values(MemoryView, ImageRange game, const Catalog&,
-                     std::uintptr_t cup_owner, CupValues&) noexcept;
+// Actual34's setter supplies the music identity; old scene-relative caches
+// are no longer the primary owner's contract. Store values, never native views.
+struct CupBinding {
+    std::uintptr_t owner{}, music{};
+    int song_id{}, style{-1};
+    std::array<int, 5> levels{};
+    std::array<std::uintptr_t, 5> layers{};
+};
+bool read_cup_binding(MemoryView, std::uintptr_t owner, std::uintptr_t music,
+                      int style, CupBinding&) noexcept;
+// Revalidate the setter tuple and all five levels against native music data.
+bool read_cup_values(MemoryView, const Catalog&, const CupBinding&,
+                     int style, CupValues&) noexcept;
 } // namespace point_zero::native

@@ -97,7 +97,7 @@ struct CategoryAccessors::State {
     static std::uintptr_t __fastcall active(std::uintptr_t owner) {
         auto& self = *live.load(std::memory_order_acquire);
         int id{};
-        if (buffer(owner, 0x2A428) && load(owner + 0x2A420, id)) {
+        if (buffer(owner, 0x29868) && load(owner + 0x29860, id)) {
             const auto i = self.index(id);
             if (i != self.ids.size()) {
                 if (const auto* b = self.find(owner, i, 3)) return b->category;
@@ -109,7 +109,7 @@ struct CategoryAccessors::State {
         const int players = is_rival ? 6 : 2;
         if (!available(owner) || difficulty < 0 || difficulty > 4 || player < 0 || player >= players) return 0;
         int selector{};
-        if (!load(owner + 0x2A424, selector) || selector == 2) return 0;
+        if (!load(owner + 0x29864, selector) || selector == 2) return 0;
         const auto* b = resolve(owner, i, 3);
         if (!b || !b->summary) return 0;
         int value{};
@@ -196,7 +196,7 @@ void CategoryAccessors::arm() {
 bool CategoryAccessors::bind(std::uintptr_t manager, std::span<const CategoryAccessBinding> input) noexcept {
     auto& self = *state_;
     if (self.phase.load(std::memory_order_acquire) != State::Phase::armed || GetCurrentThreadId() != self.thread ||
-        !buffer(manager, 0x2A428) || input.size() != self.bindings.size()) return false;
+        !buffer(manager, 0x29868) || input.size() != self.bindings.size()) return false;
     for (std::size_t i = 0; i < input.size(); ++i)
         if (input[i].id < 230 || input[i].style != static_cast<int>(i / self.ids.size()) ||
             (i && i < self.ids.size() && input[i - 1].id >= input[i].id) ||

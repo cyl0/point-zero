@@ -15,13 +15,11 @@
 
 namespace point_zero::native {
 namespace {
-// Preserve the ordinary four/NOTES indices; Step Up is the last owned patch.
-constexpr std::size_t notes_index = 4, stepup_index = 5;
-constexpr std::array<std::size_t, 6> capture_bytes{8, 8, 6, 8, 5, 8};
+constexpr std::size_t hud_index = 0, result_index = 1, notes_index = 2, stepup_index = 3, dan_index = 4;
+constexpr std::array<std::size_t, 5> capture_bytes{6, 8, 5, 8, 7};
 constexpr std::array capture_kinds{
-    PlayedCaptureKind::confirmation_first, PlayedCaptureKind::confirmation_second,
     PlayedCaptureKind::hud, PlayedCaptureKind::result, PlayedCaptureKind::unknown,
-    PlayedCaptureKind::stepup};
+    PlayedCaptureKind::stepup, PlayedCaptureKind::unknown};
 void require(bool value, const char* why) { if (!value) throw std::runtime_error(why); }
 int low_int(std::uintptr_t value) noexcept { return std::bit_cast<std::int32_t>(std::uint32_t(value)); }
 bool bounded_name(const char* from, char (&to)[96]) noexcept {
@@ -39,21 +37,27 @@ bool stack_word(std::uintptr_t address, std::uintptr_t& out) noexcept {
     __try { out = *reinterpret_cast<const std::uintptr_t*>(address); return true; }
     __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
-std::array<const PlayedFunction*, 7> functions(const PlayedSites& sites, const StepUpSites& stepup) noexcept {
-    return {&sites.named, &sites.confirmation, &sites.hud, &sites.result, &sites.result_bind, &sites.notes_update,
-            &stepup.builder};
+std::array<const PlayedFunction*, 7> functions(const PlayedSites& sites, const StepUpSites& stepup,
+                                             const DanSites& dan) noexcept {
+    return {&sites.named, &sites.hud, &sites.result, &sites.result_bind, &sites.notes_update,
+            &stepup.builder, &dan.builder};
 }
-const PlayedFunction& containing(const PlayedSites& sites, const StepUpSites& stepup, std::size_t index) noexcept {
+const PlayedFunction& containing(const PlayedSites& sites, const StepUpSites& stepup,
+                                 const DanSites& dan, std::size_t index) noexcept {
+    if (index == dan_index) return dan.builder;
     if (index == stepup_index) return stepup.builder;
-    return index < 2 ? sites.confirmation : (index == 2 ? sites.hud : (index == 3 ? sites.result : sites.notes_update));
+    return index == hud_index ? sites.hud : (index == result_index ? sites.result : sites.notes_update);
 }
-std::uintptr_t capture_at(const PlayedSites& sites, const StepUpSites& stepup, std::size_t index) noexcept {
+std::uintptr_t capture_at(const PlayedSites& sites, const StepUpSites& stepup,
+                          const DanSites& dan, std::size_t index) noexcept {
+    if (index == dan_index) return dan.capture;
     if (index == stepup_index) return stepup.capture;
-    return index < 4 ? sites.captures[index] : sites.notes_capture;
+    return index < sites.captures.size() ? sites.captures[index] : sites.notes_capture;
 }
-std::span<const std::byte> capture_body(const PlayedSites& sites, const StepUpSites& stepup, std::size_t index) {
-    const auto& fn = containing(sites, stepup, index);
-    const auto address = capture_at(sites, stepup, index);
+std::span<const std::byte> capture_body(const PlayedSites& sites, const StepUpSites& stepup,
+                                      const DanSites& dan, std::size_t index) {
+    const auto& fn = containing(sites, stepup, dan, index);
+    const auto address = capture_at(sites, stepup, dan, index);
     require(contains(fn.address, fn.body.size(), address, capture_bytes[index]),
             "played capture outside its admitted body");
     return std::span(fn.body).subspan(address - fn.address, capture_bytes[index]);
@@ -62,7 +66,7 @@ std::span<const std::byte> capture_body(const PlayedSites& sites, const StepUpSi
 
 struct PlayedHooks::State {
     enum class Phase { disabled, enabling, armed, failed };
-    struct Pending { PlayedCapture chart{}; std::uintptr_t stack{}; unsigned kind{}; };
+    struct Pending { PlayedCapture chart{}; DanCapture dan{}; std::uintptr_t stack{}; unsigned kind{}; };
     struct Scope { State* state; bool protected_context; };
     static std::atomic<bool> reserved;
     static std::atomic<State*> live;
@@ -78,6 +82,7 @@ struct PlayedHooks::State {
     // construction. MidPatch/InlinePatch retain their own displaced bytes.
     std::array<CaptureInstruction, capture_bytes.size()> instructions{};
     const std::array<std::uintptr_t, 2> result_returns;
+    const std::uint32_t dan_scene_stack_offset;
     detail::InlinePatch named;
     std::array<std::unique_ptr<detail::PlayedMidPatch>, capture_bytes.size()> captures;
     const Named original;
@@ -88,20 +93,22 @@ struct PlayedHooks::State {
     DWORD thread{};
     bool retained{};
 
-    State(MemoryView view, const PlayedSites& selected, const StepUpSites& selected_stepup, void* opaque, Callbacks calls)
+    State(MemoryView view, const PlayedSites& selected, const StepUpSites& selected_stepup,
+          const DanSites& dan, void* opaque, Callbacks calls)
         : result_returns(selected.result_returns),
+          dan_scene_stack_offset(dan.scene_stack_offset),
           named(view, selected.named.address, selected.named.body,
               reinterpret_cast<std::uintptr_t>(&named_entry)),
           original(reinterpret_cast<Named>(named.original())), context(opaque), callbacks(calls) {
         constexpr std::array<safetyhook::MidHookFn, capture_bytes.size()> entries{
-            capture0, capture1, capture2, capture3, capture4, capture5};
+            capture0, capture1, capture2, capture3, capture4};
         for (std::size_t i = 0; i < captures.size(); ++i) {
             auto& instruction = instructions[i];
-            instruction.address = capture_at(selected, selected_stepup, i);
-            instruction.named_return = i == stepup_index ? selected_stepup.named_return :
+            instruction.address = capture_at(selected, selected_stepup, dan, i);
+            instruction.named_return = i == dan_index ? dan.named_return : i == stepup_index ? selected_stepup.named_return :
                 (i < selected.named_returns.size() ? selected.named_returns[i] : 0);
             instruction.size = capture_bytes[i]; instruction.kind = capture_kinds[i];
-            const auto before = capture_body(selected, selected_stepup, i);
+            const auto before = capture_body(selected, selected_stepup, dan, i);
             std::copy(before.begin(), before.end(), instruction.expected.begin());
             captures[i] = std::make_unique<detail::PlayedMidPatch>(view, instruction.address,
                 std::span(instruction.expected).first(instruction.size), entries[i], *selected.bindings);
@@ -146,20 +153,29 @@ struct PlayedHooks::State {
         if (!self.enter()) return;
         __try {
             if (index == notes_index) { self.callbacks.notes(self.context, registers.rdi); return; }
+            if (index == dan_index) {
+                DanCapture dan;
+                if (!stack_word(registers.rsp + self.dan_scene_stack_offset, dan.scene)) return;
+                dan.wrapper = registers.rbx; dan.music = registers.r13;
+                dan.row = low_int(registers.r15); dan.style = low_int(registers.r12);
+                dan.difficulty = low_int(registers.rdi); dan.native_level = low_int(registers.r14);
+                pending = {{}, dan, registers.rsp, static_cast<unsigned>(index + 1)};
+                return;
+            }
             PlayedCapture chart;
             chart.site = self.instructions[index].address;
             chart.kind = self.instructions[index].kind;
-            chart.owner = index == stepup_index ? registers.rsi : registers.r14;
-            if (index == 2) {
+            chart.owner = index == stepup_index ? registers.rdi : registers.r14;
+            if (index == hud_index) {
                 chart.music = registers.rbp; chart.player = low_int(registers.rbx);
                 chart.style = low_int(registers.rsi); chart.difficulty = low_int(registers.rdi);
                 chart.native_level = low_int(registers.rax);
-            } else if (index == 3) {
+            } else if (index == result_index) {
                 chart.music = registers.r13; chart.player = low_int(registers.rsi);
                 chart.style = low_int(registers.rbx); chart.difficulty = low_int(registers.r15);
                 chart.native_level = low_int(registers.rax);
             }
-            const Pending next{chart, registers.rsp, static_cast<unsigned>(index + 1)};
+            const Pending next{chart, {}, registers.rsp, static_cast<unsigned>(index + 1)};
             // The observer may enter native code itself. Publish this one-shot
             // token only after it returns so its nested work cannot inherit it.
             self.callbacks.capture(self.context, chart);
@@ -171,7 +187,6 @@ struct PlayedHooks::State {
     static void capture2(safetyhook::Context& r) noexcept { capture(2, r); }
     static void capture3(safetyhook::Context& r) noexcept { capture(3, r); }
     static void capture4(safetyhook::Context& r) noexcept { capture(4, r); }
-    static void capture5(safetyhook::Context& r) noexcept { capture(5, r); }
 
     bool matches(const Pending& token, std::uintptr_t entry_stack) const noexcept {
         if (!token.kind || token.kind > capture_bytes.size() || token.kind == notes_index + 1 ||
@@ -183,7 +198,7 @@ struct PlayedHooks::State {
         if (!stack_word(entry_stack, caller) || caller != named_return) return false;
         // Step Up's fast binder restores its entire frame before tail-jumping
         // to named. It has the same exact stack relation as a direct caller.
-        if (index != 3) return token.stack == entry_stack + 8;
+        if (index != result_index) return token.stack == entry_stack + 8;
         // The admitted result_bind pushes RBX and reserves20h before calling
         // named. Its outer return distinguishes the selected result from every
         // other user of that shared helper. No heuristic stack unwinding.
@@ -213,9 +228,16 @@ struct PlayedHooks::State {
             char copied[96]{};
             const bool named_ok = bounded_name(name, copied);
             PlayedCapture selected;
-            if (entered && !previous && named_ok && self.matches(next, entry_stack)) selected = next.chart;
+            DanCapture dan;
+            if (entered && !previous && named_ok && self.matches(next, entry_stack)) {
+                selected = next.chart;
+                dan = next.dan;
+            }
+            std::uintptr_t caller{};
+            stack_word(entry_stack, caller);
             __try {
-                self.callbacks.begin(self.context, selected, wrapper, named_ok ? copied : nullptr);
+                self.callbacks.begin(self.context, selected, wrapper, named_ok ? copied : nullptr, caller);
+                self.callbacks.begin_dan(self.context, dan, wrapper, named_ok ? copied : nullptr);
                 return self.original(wrapper, name);
             } __finally { self.callbacks.end(self.context); }
         } __finally {
@@ -229,14 +251,14 @@ std::atomic<PlayedHooks::State*> PlayedHooks::State::live{};
 constinit thread_local PlayedHooks::State::Pending PlayedHooks::State::pending{};
 constinit thread_local PlayedHooks::State::Scope* PlayedHooks::State::scope{};
 
-PlayedHooks::PlayedHooks(MemoryView memory, const PlayedSites& sites, const StepUpSites& stepup,
+PlayedHooks::PlayedHooks(MemoryView memory, const PlayedSites& sites, const StepUpSites& stepup, const DanSites& dan,
                          void* context, Callbacks callbacks) {
     bool available{};
     require(State::reserved.compare_exchange_strong(available, true), "played hook process slot already reserved");
     try {
-        require(memory.read && memory.query && callbacks.capture && callbacks.begin && callbacks.end && callbacks.notes,
+        require(memory.read && memory.query && callbacks.capture && callbacks.begin && callbacks.end && callbacks.notes && callbacks.begin_dan,
                 "played hook callbacks or memory missing");
-        const auto bodies = functions(sites, stepup);
+        const auto bodies = functions(sites, stepup, dan);
         for (std::size_t i = 0; i < bodies.size(); ++i) {
             const auto& a = *bodies[i];
             require(a.address >= 0x10000 && !a.body.empty() && a.body.size() <= UINTPTR_MAX - a.address,
@@ -247,10 +269,9 @@ PlayedHooks::PlayedHooks(MemoryView memory, const PlayedSites& sites, const Step
                         "played hook function bodies overlap");
             }
         }
-        for (std::size_t i = 0; i < capture_bytes.size(); ++i) (void)capture_body(sites, stepup, i);
-        require(sites.captures[0] + capture_bytes[0] <= sites.captures[1], "played confirmation captures overlap");
+        for (std::size_t i = 0; i < capture_bytes.size(); ++i) (void)capture_body(sites, stepup, dan, i);
         for (std::size_t i = 0; i < sites.named_returns.size(); ++i) {
-            const auto& fn = i == 3 ? sites.result_bind : containing(sites, stepup, i);
+            const auto& fn = i == result_index ? sites.result_bind : containing(sites, stepup, dan, i);
             require(contains(fn.address, fn.body.size(), sites.named_returns[i], 1), "played named return outside its body");
         }
         require(sites.result_returns[0] != sites.result_returns[1], "played result returns are duplicated");
@@ -258,7 +279,9 @@ PlayedHooks::PlayedHooks(MemoryView memory, const PlayedSites& sites, const Step
             require(contains(sites.result.address, sites.result.body.size(), caller, 1), "played result return outside its body");
         require(contains(stepup.builder.address, stepup.builder.body.size(), stepup.named_return, 1),
                 "Step Up named return outside builder body");
-        state_ = new State(memory, sites, stepup, context, callbacks);
+        require(contains(dan.builder.address, dan.builder.body.size(), dan.named_return, 1),
+                "Dan named return outside builder body");
+        state_ = new State(memory, sites, stepup, dan, context, callbacks);
     } catch (...) { State::reserved.store(false, std::memory_order_release); throw; }
 }
 PlayedHooks::~PlayedHooks() noexcept {

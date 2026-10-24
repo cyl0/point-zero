@@ -88,7 +88,7 @@ struct CategoryNavigation::State {
         std::uintptr_t manager{}, list{};
         return expected.manager >= 0x10000 && expected.list >= 0x10000 && expected.group >= 0x10000 &&
             read(memory, game.base + game_bindings(game).category_navigation.category_manager_rva, manager) && manager == expected.manager &&
-            read(memory, manager + 0x175D0, list) && list == expected.list;
+            read(memory, manager + 0x16F50, list) && list == expected.list;
     }
     bool enabled() const noexcept {
         return roots && feature.view().enabled() && roots->state() == CategoryRootsState::published;
@@ -103,7 +103,7 @@ struct CategoryNavigation::State {
         if (busy || nav != navigation || !enabled()) return false;
         if (!current(owner)) return false; // The outer owner will bind the new native list.
         int group{};
-        if (!read(memory, owner.list + 0x84, group)) return false;
+        if (!selected_group_id(memory, owner.list, group)) return false;
         if (group != 1) return false;
         CategoryRootSelection before;
         std::uint8_t open{};
@@ -151,7 +151,7 @@ struct CategoryNavigation::State {
             std::uint8_t short_press{};
             int group{};
             if (!closed(before) || category != before.category ||
-                !read(memory, owner.list + 0x84, group) || group != 1 ||
+                !selected_group_id(memory, owner.list, group) || group != 1 ||
                 !read(memory, navigation + 8, short_press) || short_press != 1) return false;
             *reinterpret_cast<std::uint8_t*>(navigation + 8) = 0;
             calls.close(navigation, 1); // Native cursor/filter/motion reset and Back sound.
@@ -171,7 +171,7 @@ struct CategoryNavigation::State {
         busy = true;
         __try {
             int group{};
-            if (read(memory, list + 0x84, group) && group != 1 && current(owner)) (void)roots->leave();
+            if (selected_group_id(memory, list, group) && group != 1 && current(owner)) (void)roots->leave();
         } __except (EXCEPTION_EXECUTE_HANDLER) { }
         busy = false;
     }
@@ -209,7 +209,7 @@ struct CategoryNavigation::State {
         if (!enabled() || !current(owner)) return false;
         int group{};
         CategoryRootSelection selected;
-        if (!read(memory, owner.list + 0x84, group)) return false;
+        if (!selected_group_id(memory, owner.list, group)) return false;
         if (group != 1) return false;
         if (!roots->selection(selected)) return false;
         if (selected.category != category || !roots->owns(category, selected.id, selected.style) ||
@@ -317,7 +317,7 @@ bool CategoryNavigation::bind(CategoryRoots& roots, std::uintptr_t navigation) n
     std::uint8_t open{};
     int group{};
     if (!roots.current() || !self.current(owner) || !read(self.memory, navigation + 5, open) || open > 1 ||
-        !read(self.memory, owner.list + 0x84, group)) return false;
+        !selected_group_id(self.memory, owner.list, group)) return false;
     CategoryRootSelection selected;
     if (group == 1 && (!roots.selection(selected) || selected.open != open)) return false;
     self.owner = owner; self.roots = &roots; self.navigation = navigation;

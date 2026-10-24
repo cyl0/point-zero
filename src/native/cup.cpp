@@ -1,4 +1,3 @@
-#include "build_bindings.hpp"
 #include "cup.hpp"
 
 #include <windows.h>
@@ -30,12 +29,14 @@ template<class Owner> void collect_owner(Owner& owner, const CupAfp& afp) {
 }
 } // namespace
 
-CupRenderer::CupRenderer(const AdapterContext& context, CupAfp afp)
-    : game_(context.modules.game.range), memory_(context.memory), catalog_(context.catalog),
-      state_(context.state), host_(context.host), afp_(afp) {
+CupRenderer::CupRenderer(const AdapterContext& context, CupAfp afp, CupNativeCalls calls)
+    : memory_(context.memory), catalog_(context.catalog),
+      state_(context.state), host_(context.host), afp_(afp), calls_(calls) {
     if (!afp.valid || !afp.path || !afp.relative || !afp.package ||
         !afp.animation_info || !afp.attach || !afp.control || !afp.path_relative || !afp.property)
         throw std::invalid_argument("incomplete admitted cup AFP calls");
+    if (!calls.style || !calls.clock || !calls.rate)
+        throw std::invalid_argument("incomplete admitted primary native calls");
 }
 
 bool CupRenderer::same_thread() const noexcept { return thread_ && thread_ == GetCurrentThreadId(); }
@@ -55,21 +56,22 @@ bool CupRenderer::preload_impl(std::uintptr_t slot) {
         !read_field(memory_, slot, 0x514, package_) || (package_ & 0x78000000U) != 0x30000000U ||
         !live_package()) return false;
     for (unsigned f = 0; f < bank_.size(); ++f) {
-        const char letter = f < 5 ? letters[f] : 'b', variant = f < 5 ? 's' : 'c';
+        const char letter = letters[f % 5], variant = f < 5 ? 'p' : 's';
         auto& bank = bank_[f];
         for (unsigned part = 0; part < 25; ++part) {
             char resource[40]{};
             std::uint32_t* out{};
             if (part == 0) {
-                std::snprintf(resource, sizeof(resource), "lab_glyph_%c%c", letter, variant); out = &bank.container;
+                if (f) continue;
+                std::snprintf(resource, sizeof(resource), "lab_glyph_bs"); out = &component_;
             } else if (part <= 13) {
-                std::snprintf(resource, sizeof(resource), "lab_glyph_%c%c_p%03u", letter, variant, part);
+                std::snprintf(resource, sizeof(resource), "pz34_%c%c_w%02u", variant, letter, part - 1);
                 out = &bank.whole[part - 1];
             } else if (part <= 23) {
-                std::snprintf(resource, sizeof(resource), "pz_cf_%c%c_%u", letter, variant, part - 14);
+                std::snprintf(resource, sizeof(resource), "pz34_%c%c_f%u", variant, letter, part - 14);
                 out = &bank.fraction[part - 14];
             } else {
-                std::snprintf(resource, sizeof(resource), "pz_cp_%c%c", letter, variant); out = &bank.point;
+                std::snprintf(resource, sizeof(resource), "pz34_%c%c_point", variant, letter); out = &bank.point;
             }
             std::uint64_t info[8]{};
             if (afp_.animation_info(info, package_, resource) ||
@@ -98,6 +100,14 @@ CupRenderer::Owner* CupRenderer::find(int mc) noexcept {
 void CupRenderer::collect() {
     for (auto& owner : owners_) collect_owner(owner, afp_);
 }
+void CupRenderer::begin_set() noexcept {
+    if (same_thread()) binding_ = {};
+}
+void CupRenderer::bind(std::uintptr_t owner, std::uintptr_t music) noexcept {
+    if (!same_thread()) return;
+    __try { read_cup_binding(memory_, owner, music, calls_.style(), binding_); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { binding_ = {}; fault(); }
+}
 void CupRenderer::begin_impl(std::uintptr_t owner) {
     if (!same_thread()) { fault(); return; }
     if (++depth_ != 1) return;
@@ -106,15 +116,14 @@ void CupRenderer::begin_impl(std::uintptr_t owner) {
     if (view.phase != FeaturePhase::ready) return;
     if (!view.enabled()) return;
     if (!prepared_ || !live_package()) { fault(); return; }
-    std::uintptr_t clock{};
-    int mode{}, rate{};
-    if (!read_field(memory_, owner, 0x34, current_.counter) || !read_field(memory_, game_.base, game_bindings(game_).cup.animation_clock_rva, clock) ||
-        !read_field(memory_, clock, 0x260, mode) || !read_field(memory_, clock, 0x270, rate)) return;
-    if (mode == 2) rate = 60;
-    if (rate < 1) return;
+    if (binding_.owner != owner || !read_field(memory_, owner, 0x34, current_.counter)) return;
+    const auto clock = calls_.clock();
+    if (clock < 0x10000) return;
+    const int rate = calls_.rate(clock);
+    if (rate < 1 || rate > 1000) return;
     current_.duration = int(float(rate) * 0.26666999f + .5f);
     current_.enabled = current_.duration > 0 &&
-        read_cup_values(memory_, game_, catalog_, owner, current_.values);
+        read_cup_values(memory_, catalog_, binding_, calls_.style(), current_.values);
 }
 void CupRenderer::begin(std::uintptr_t owner) noexcept {
     __try { begin_impl(owner); }
@@ -144,16 +153,16 @@ bool CupRenderer::apply(Owner* owner, int mc, std::uint32_t stream, int family_i
         if (!owner) return false;
     }
     const auto& bank = bank_[family_index];
-    const bool fresh = !owner->mc, replaced = fresh || owner->component != bank.container;
-    const bool changed = replaced || owner->value != value;
+    const bool fresh = !owner->mc, replaced = fresh || owner->component != component_;
+    const bool changed = replaced || owner->value != value || owner->family != family_index;
     cup_art::Placement placement;
     if (!cup_art::placement(family_index, value, placement)) { fault(); return false; }
     int rc{};
     if (fresh) { *owner = {}; owner->cup = current_.owner; owner->stream = stream; owner->mc = mc; }
     if (replaced) {
-        rc = afp_.attach(mc, bank.container);
+        rc = afp_.attach(mc, component_);
         if (!rc) rc = afp_.control(mc, 0xF04, 0);
-        owner->component = bank.container;
+        owner->component = component_;
         std::fill(std::begin(owner->children), std::end(owner->children), 0);
         std::fill(std::begin(owner->parts), std::end(owner->parts), 0);
         std::fill(std::begin(owner->inks), std::end(owner->inks), 0);
@@ -195,6 +204,7 @@ bool CupRenderer::apply(Owner* owner, int mc, std::uint32_t stream, int family_i
     }
     if (!state_.view().enabled()) return restore(*owner, mc, name, mode, result, stock);
     owner->value = value;
+    owner->family = family_index;
     result = 0;
     return true;
 }
@@ -217,10 +227,10 @@ bool CupRenderer::bitmap_impl(int mc, const char* name, int mode, int& result, S
     const int difficulty = int(letter - letters), native_value = (name[3] - '0') * 10 + name[4] - '0';
     if (native_value < 1 || native_value > 12) return forward();
 
-    std::uintptr_t layer{}, vt{};
+    std::uintptr_t layer{};
     std::uint32_t stream{};
-    if (!read_field(memory_, current_.owner, 8ULL * difficulty, layer) || !read_field(memory_, layer, 0, vt) ||
-        vt != game_.base + game_bindings(game_).cup.layer_vtable || !read_field(memory_, layer, 8, stream) || afp_.valid(5, stream) < 0) return forward();
+    if (!read_field(memory_, current_.owner, 8ULL * difficulty, layer) || layer != binding_.layers[difficulty] ||
+        !read_field(memory_, layer, 8, stream) || afp_.valid(5, stream) < 0) return forward();
     char leaf[]{'d','i','f','f','_',letters[difficulty],0};
     bool found{};
     int handle = afp_.path(stream, leaf);
@@ -236,7 +246,7 @@ bool CupRenderer::bitmap_impl(int mc, const char* name, int mode, int& result, S
     if (!chart || !chart->assigned ||
         std::clamp(animated(chart->native_level, current_.counter, current_.duration), 1, 12) != native_value) return forward();
     const int value = animated(chart->effective_tenths, current_.counter, current_.duration);
-    return apply(owned, mc, stream, length == 9 ? difficulty : 5, value, name, mode, result, stock);
+    return apply(owned, mc, stream, difficulty + (length == 9 ? 5 : 0), value, name, mode, result, stock);
 }
 bool CupRenderer::bitmap(int mc, const char* name, int mode, int& result, StockBitmap stock) noexcept {
     __try { return bitmap_impl(mc, name, mode, result, stock); }

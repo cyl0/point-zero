@@ -19,11 +19,11 @@ struct MemoryView {
     bool operator==(const MemoryView&) const = default;
 };
 struct GameBindings;
-extern const GameBindings august_bindings;
+extern const GameBindings october_bindings;
 struct ImageRange {
     std::uintptr_t base{};
     std::size_t size{};
-    const GameBindings* bindings = &august_bindings;
+    const GameBindings* bindings = &october_bindings;
 };
 enum class RangeUse { image_read, image_code, private_code, private_writable };
 

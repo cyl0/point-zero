@@ -10,7 +10,7 @@ struct CategoryVectorCalls {
     void (__fastcall* destroy)(category_layout::Vector*){};
 };
 
-// Finite, read-only LDJ-010-2026081900 admission of the two native standalone
+// Finite, read-only admission of the selected build's two native standalone
 // pointer-vector operations. Throws on refusal; installs no hook or allocation
 // in the game and executes neither operation. The caller retains the inspected
 // image, serializes native calls, and owns the vector/allocation lifetimes.

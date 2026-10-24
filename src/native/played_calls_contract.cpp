@@ -40,14 +40,14 @@ PlayedNativeCalls admit_played_calls(MemoryView memory, const NativeModules& mod
     result.control = shared.control;
     result.property = reinterpret_cast<decltype(result.property)>(target(memory, game, bindings.property_import_rva));
     result.path_relative = shared.path_relative;
-    result.resolve = reinterpret_cast<decltype(result.resolve)>(code(memory, core, 0x48AC0));
-    result.definition = reinterpret_cast<decltype(result.definition)>(code(memory, core, 0x521A0));
-    result.select_stream = reinterpret_cast<decltype(result.select_stream)>(code(memory, core, 0x41A0));
-    result.restore_stream = reinterpret_cast<decltype(result.restore_stream)>(code(memory, core, 0x4260));
-    result.set_name = reinterpret_cast<decltype(result.set_name)>(code(memory, core, 0x22740));
-    result.clear_name = reinterpret_cast<decltype(result.clear_name)>(code(memory, core, 0x3BB10));
-    result.position = reinterpret_cast<decltype(result.position)>(code(memory, core, 0x21800));
-    result.timeline_position = reinterpret_cast<decltype(result.timeline_position)>(target(memory, core, 0xDD390 + 8 * 30));
+    result.resolve = reinterpret_cast<decltype(result.resolve)>(code(memory, core, 0x49D60));
+    result.definition = reinterpret_cast<decltype(result.definition)>(code(memory, core, 0x73890));
+    result.select_stream = reinterpret_cast<decltype(result.select_stream)>(code(memory, core, 0xE8D0));
+    result.restore_stream = reinterpret_cast<decltype(result.restore_stream)>(code(memory, core, 0xEA90));
+    result.set_name = reinterpret_cast<decltype(result.set_name)>(code(memory, core, 0x25280));
+    result.clear_name = reinterpret_cast<decltype(result.clear_name)>(code(memory, core, 0x51C90));
+    result.position = reinterpret_cast<decltype(result.position)>(code(memory, core, 0x24A50));
+    result.timeline_position = reinterpret_cast<decltype(result.timeline_position)>(code(memory, core, 0x24DB0));
     return result;
 }
 } // namespace point_zero::native

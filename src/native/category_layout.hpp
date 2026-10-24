@@ -6,7 +6,7 @@
 #include <type_traits>
 
 namespace point_zero::native::category_layout {
-// Reviewed LDJ2026081900 storage, copied as values. Addresses are never C++
+// Native category storage, copied as values. Addresses are never C++
 // containers; their native allocation, lifetime and mutators remain separate.
 struct Vector {
     std::uintptr_t begin{}, end{}, capacity{};

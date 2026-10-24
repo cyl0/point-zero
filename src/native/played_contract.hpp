@@ -13,20 +13,20 @@ struct PlayedFunction {
     std::vector<std::byte> body; // Retained native bytes; patch ownership is checked by the hook.
 };
 struct PlayedSites {
-    PlayedFunction named, confirmation, hud, result, result_bind;
-    // Absolute addresses, ordered confirmation copy 0, copy 1, HUD, result.
+    PlayedFunction named, hud, result, result_bind;
+    // Absolute addresses, ordered HUD, result.
     // Captures are instruction boundaries, not necessarily CALL returns.
-    std::array<std::uintptr_t, 4> captures{};
-    // Returns from named (340390). Result's return is inside result_bind,
+    std::array<std::uintptr_t, 2> captures{};
+    // Returns from named (3298B0). Result's return is inside result_bind,
     // shared with other callers, and does not itself establish result scope.
-    std::array<std::uintptr_t, 4> named_returns{};
+    std::array<std::uintptr_t, 2> named_returns{};
     PlayedFunction notes_update;
     std::uintptr_t notes_capture{};
-    const GameBindings* bindings = &august_bindings;
+    const GameBindings* bindings = &october_bindings;
     std::array<std::uintptr_t, 2> result_returns{}; // Outer result -> shared layer helper.
 };
 
-// Finite LDJ-010-2026081900 capture/name-routing admission records native
+// Finite LDJ-010-2026101300 capture/name-routing admission records native
 // bytes and checks selected-image allocation/protection. Patch owners consume
 // the required instruction bytes; admission does not authenticate full bodies.
 // Throws on failure; no native calls, hooks, DLL loading or shared-state writes.

@@ -10,6 +10,8 @@
 namespace point_zero::native {
 namespace {
 constexpr const char* labels[]{"whole", "point", "fraction"};
+constexpr std::array families{PlayedRenderer::family, PlayedRenderer::result_family, PlayedRenderer::stepup_family};
+constexpr std::array<std::size_t, 4> image_boundaries{0, 14, 129, played_art::image_count};
 
 
 bool same_layout(const played_art::Plan& a, const played_art::Plan& b) noexcept {
@@ -47,40 +49,50 @@ PlayedRenderer::PlayedRenderer(const AdapterContext& context, PlayedNativeCalls 
 
 bool PlayedRenderer::same_thread() const noexcept { return thread_ && thread_ == GetCurrentThreadId(); }
 bool PlayedRenderer::live() const {
-    int state{}; std::uint32_t id{};
-    return same_thread() && read_field(memory_, slot_, 0x510, state) && state == 2 &&
-        read_field(memory_, slot_, 0x514, id) && id == package_ && calls_.package(family.data()) == id;
+    if (!same_thread()) return false;
+    for (std::size_t i = 0; i < slots_.size(); ++i) {
+        int state{}; std::uint32_t id{};
+        if (!read_field(memory_, slots_[i], 0x510, state) || state != 2 ||
+            !read_field(memory_, slots_[i], 0x514, id) || id != packages_[i] ||
+            calls_.package(families[i].data()) != id) return false;
+    }
+    return true;
 }
-bool PlayedRenderer::preload_impl(std::uintptr_t slot) {
+bool PlayedRenderer::preload_impl(std::uintptr_t slot, std::uintptr_t result_slot, std::uintptr_t stepup_slot) {
     if (attempted_) return false;
     attempted_ = true;
     if (state_.view().phase != FeaturePhase::preparing) return false;
-    thread_ = GetCurrentThreadId(); slot_ = slot;
-    std::array<char, 256> name{};
-    if (!read_field(memory_, slot_, 8, name) ||
-        std::string_view(name.data(), family.size()) != family || name[family.size()] != '\0' ||
-        !read_field(memory_, slot_, 0x514, package_) || (package_ & 0x78000000U) != 0x30000000U ||
-        !live()) return false;
+    thread_ = GetCurrentThreadId(); slots_ = {slot, result_slot, stepup_slot};
+    for (std::size_t i = 0; i < slots_.size(); ++i) {
+        std::array<char, 256> name{};
+        if (!read_field(memory_, slots_[i], 8, name) ||
+            std::string_view(name.data(), families[i].size()) != families[i] || name[families[i].size()] != '\0' ||
+            !read_field(memory_, slots_[i], 0x514, packages_[i]) ||
+            (packages_[i] & 0x78000000U) != 0x30000000U) return false;
+    }
+    if (!live()) return false;
     const auto images = played_art::images();
     if (images.size() != images_.size()) return false;
-    for (std::size_t i = 0; i < images.size(); ++i) {
-        alignas(8) std::array<std::byte, 64> info{};
-        if (calls_.image_info(info.data(), package_, images[i].name)) return false;
-        if (calls_.arguments(images_[i].args.data(), info.data())) return false;
+    for (std::size_t package = 0; package < packages_.size(); ++package) {
+        for (auto i = image_boundaries[package]; i < image_boundaries[package + 1]; ++i) {
+            alignas(8) std::array<std::byte, 64> info{};
+            if (calls_.image_info(info.data(), packages_[package], images[i].name)) return false;
+            if (calls_.arguments(images_[i].args.data(), info.data())) return false;
+        }
+        std::uint64_t info[8]{};
+        if (calls_.animation_info(info, packages_[package], "lab_played_slots") ||
+            (std::uint32_t(info[3]) & 0x70000000U) != 0x30000000U) return false;
+        components_[package] = std::uint32_t(info[3]);
     }
     std::uint64_t info[8]{};
-    if (calls_.animation_info(info, package_, "lab_played_slots") ||
-        (std::uint32_t(info[3]) & 0x70000000U) != 0x30000000U) return false;
-    component_ = std::uint32_t(info[3]);
-    std::fill(std::begin(info), std::end(info), 0);
-    if (calls_.animation_info(info, package_, "lab_played_plate") ||
+    if (calls_.animation_info(info, packages_[1], "lab_played_plate") ||
         (std::uint32_t(info[3]) & 0x70000000U) != 0x30000000U ||
         !plate_.prepare(std::uint32_t(info[3])) || !notes_.prepare()) return false;
     ready_ = live();
     return ready_;
 }
-bool PlayedRenderer::preload(std::uintptr_t slot) noexcept {
-    __try { return preload_impl(slot); }
+bool PlayedRenderer::preload(std::uintptr_t slot, std::uintptr_t result_slot, std::uintptr_t stepup_slot) noexcept {
+    __try { return preload_impl(slot, result_slot, stepup_slot); }
     __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 void PlayedRenderer::fault() noexcept {
@@ -199,7 +211,9 @@ bool PlayedRenderer::apply(Owner* owner, int mc, const played_art::Plan& plan, i
         rc = stock(mc, name, mode);
         if (rc) { fault(); result = rc; return true; }
         owner->attached = true; // Keep uncertain attachment until its children are known/retired.
-        rc = calls_.attach(mc, component_);
+        const auto surface = current_.chart.surface;
+        rc = calls_.attach(mc, components_[surface == played_art::Surface::result ? 1 :
+                                          surface == played_art::Surface::stepup ? 2 : 0]);
         if (!rc) rc = calls_.control(mc, 0xF04, 0);
     }
     for (std::size_t i = 0; i < plan.parts.size() && !rc; ++i) {

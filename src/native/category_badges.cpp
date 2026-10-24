@@ -113,7 +113,7 @@ bool run(MemoryView memory, const CategoryBadgeCalls& calls, std::uintptr_t mana
          std::span<const CategoryAccessBinding> input, bool& wrote) {
     if (!memory.read || !memory.query || !calls.music_owner || !calls.event_owner || !calls.chart_at ||
         !calls.music_of || !calls.weekly || !calls.recommend || !calls.shop || !calls.kac ||
-        !buffer(manager, 0x2A428) || input.size() > 288) return false;
+        !buffer(manager, 0x29868) || input.size() > 288) return false;
     std::vector<Entry> entries(input.size());
     std::array<unsigned, 2> counts{};
     std::size_t total{};

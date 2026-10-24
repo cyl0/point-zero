@@ -60,10 +60,10 @@ bool DifficultySort::observe(Context& out) const {
     const auto m = context_.memory;
     const auto game = context_.modules.game.range;
     int list_style{}, native_style{};
-    // Ordinary scope only: 949530 can force bank0 through the native BATTLE
+    // Ordinary scope only: 930140 can force bank0 through the native BATTLE
     // option even when DP is set. Do not rely only on a previously shared flag.
-    if (!global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.store_rva, out.manager) || !read_field(m, out.manager, 0x175D0, out.list) ||
-        !read_field(m, out.manager, 0x2A424, out.style) || out.style < 0 || out.style > 1 ||
+    if (!global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.store_rva, out.manager) || !read_field(m, out.manager, 0x16F50, out.list) ||
+        !read_field(m, out.manager, 0x29864, out.style) || out.style < 0 || out.style > 1 ||
         !read_field(m, out.list, 0x78, list_style) || list_style != out.style ||
         !global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.style_flag_rva, native_style) || native_style != out.style ||
         !global(m, game, game_bindings(context_.modules.game.range).difficulty_sort.visible_bars_rva, out.bars) || out.bars != 1 ||

@@ -8,9 +8,9 @@ struct Transform {
 };
 using Placement = std::array<Transform, 3>;
 
-// Approved palette families [0, 5], count-up tenths [0, 129].
-// Output order: whole, fraction, point. Fixed maximum 129 and layout scale 1;
-// whole transforms restore native art size, dedicated fraction/point scale is 1.
+// Plain B/N/H/A/L families [0,4], selected families [5,9], tenths [0,129].
+// Output order: whole, fraction, point. Native 94x66 whole cells stay at scale1;
+// fraction/point transforms are the accepted archive's matching placements.
 // Returns false for invalid input and leaves out unchanged.
 bool placement(int family, int tenths, Placement& out) noexcept;
 } // namespace point_zero::native::cup_art

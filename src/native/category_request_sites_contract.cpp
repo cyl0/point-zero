@@ -6,7 +6,7 @@ CategoryRequestSites admit_category_request_sites(MemoryView memory, const Image
     const auto& bindings = game_bindings(game.range).category_request_sites_contract;
     CategoryRequestSites result;
     result.game = game.range;
-    result.manager_getter = game.range.base + bindings.pins[4].begin;
+    result.manager_getter = game.range.base + bindings.pins[3].begin;
     for (std::size_t i = 0; i < result.entries.size(); ++i) {
         const auto pin = bindings.pins[i];
         result.entries[i] = {game.range.base + pin.begin,

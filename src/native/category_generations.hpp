@@ -100,7 +100,8 @@ private:
     Generation* current_{}, *building_{}, *summary_{};
     std::uint32_t thread_{};
     unsigned depth_{}, initializing_depth_{};
-    bool initialization_ready_{};
+    bool initialization_ready_{}, initialization_detached_{};
+    std::uintptr_t initialization_manager_{}, initialization_list_{}, initialization_control_{};
     unsigned refreshing_depth_{};
     int refreshing_style_{};
     struct Refresh {

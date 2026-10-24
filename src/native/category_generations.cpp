@@ -15,7 +15,7 @@ bool pointer(std::uintptr_t at, std::size_t bytes = 0) noexcept {
 bool same_view(const FeatureView& a, const FeatureView& b) noexcept {
     return a.phase == b.phase && a.preference == b.preference && a.battle == b.battle;
 }
-bool filtered(int id) noexcept { return id == 110 || (id >= 210 && id <= 214); }
+bool filtered(int id) noexcept { return id == 119 || (id >= 219 && id <= 223); }
 bool vector_fits(const category_layout::Vector& v, int count, std::size_t width) noexcept {
     if (count < 0 || count > 20003) return false;
     if (v == category_layout::Vector{}) return !count;
@@ -30,20 +30,20 @@ template<class T> bool read(MemoryView m, std::uintptr_t at, T& out) noexcept {
 }
 bool browsing_mode(int mode) noexcept { return mode == 0 || mode == 6; }
 bool native_level(std::uintptr_t manager, std::uintptr_t category, int id, int style) noexcept {
-    return id >= 6 && id <= 17 && style >= 0 && style < 2 &&
-        category == manager + 16 + sizeof(category_layout::Category) * (230ULL * style + id);
+    return id >= 13 && id <= 24 && style >= 0 && style < 2 &&
+        category == manager + 16 + sizeof(category_layout::Category) * (226ULL * style + id);
 }
 bool read_scene_owner(MemoryView memory, ImageRange game, std::uintptr_t& manager,
                       std::uintptr_t& list, std::uintptr_t expected_manager = 0,
                       std::uintptr_t expected_list = 0) noexcept {
     return read(memory, game.base + game_bindings(game).category_generations.category_manager_rva, manager) &&
-        (!expected_manager || manager == expected_manager) && pointer(manager, 0x2A428) &&
-        read(memory, manager + 0x175D0, list) &&
+        (!expected_manager || manager == expected_manager) && pointer(manager, 0x29868) &&
+        read(memory, manager + 0x16F50, list) &&
         (!expected_list || list == expected_list) && pointer(list, 0x88);
 }
 bool read_scene_styles(MemoryView memory, std::uintptr_t manager, std::uintptr_t list,
                        int& raw, int& normalized) noexcept {
-    return read(memory, manager + 0x2A424, raw) && read(memory, list + 0x78, normalized);
+    return read(memory, manager + 0x29864, raw) && read(memory, list + 0x78, normalized);
 }
 bool closed_leaf(MemoryView memory, std::uintptr_t navigation, std::uintptr_t category) noexcept {
     std::uint8_t open{}, category_open{};
@@ -183,7 +183,12 @@ bool CategoryGenerations::initialize(std::uintptr_t navigation) {
     g.manager = manager; g.list = list; g.group = group; g.navigation = navigation;
     generations_.push_back(std::move(owned));
     current_ = &g;
-    if (view.preference && style != 2 && (!build_bank(g) || !publish_roots(g))) return false;
+    if (view.preference && style != 2) {
+        // The queued34 callback has already restored the native selection.
+        // Reuse the toggle transaction to translate that selection after publication.
+        Selection before;
+        return capture(before) && change_preference(before, true);
+    }
     return context_.state.commit_view(view.preference, style == 2);
 }
 bool CategoryGenerations::build_bank(Generation& g) {
@@ -256,7 +261,7 @@ CategoryGenerations::Exchange CategoryGenerations::withdraw_roots(Generation& g)
 
 bool CategoryGenerations::tick_context(std::uintptr_t scene, Tick& out) {
     if (!current_ || current_->uncertain || changing_ || building_ || summary_ || restoring_ || returning_depth_ || refreshing_depth_ || requesting_ ||
-        initializing_depth_ || !pointer(scene, 0x2011) || scene + 0x4C0 != current_->navigation) return false;
+        initializing_depth_ || !pointer(scene, 0x20F9) || scene + 0x4B8 != current_->navigation) return false;
     out.generation = current_; out.scene = scene; out.navigation = current_->navigation;
     out.manager = current_->manager; out.list = current_->list; out.view = context_.state.view();
     if (out.view.phase != FeaturePhase::ready || out.view.battle) return false;
@@ -271,13 +276,13 @@ bool CategoryGenerations::tick_context(std::uintptr_t scene, Tick& out) {
         out.style < 0 || out.style > 1 || style != out.style ||
         !read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, out.dp) || out.dp != out.style ||
         !read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, out.active) ||
-        !read(context_.memory, scene + 0x90, out.controller) || !pointer(out.controller, 0x52) ||
+        !read(context_.memory, scene + 0x98, out.controller) || !pointer(out.controller, 0x52) ||
         !read(context_.memory, out.controller, target) || target != scene ||
         !read(context_.memory, out.controller + 8, callback) || callback != game + game_bindings(context_.modules.game.range).category_generations.idle_callback_rva ||
         !read(context_.memory, out.controller + 0x10, adjustment) || adjustment ||
         !read(context_.memory, out.controller + 0x38, queued) || queued ||
         !read(context_.memory, out.controller + 0x51, enabled) || !enabled ||
-        !read(context_.memory, scene + 0x2010, confirm) || confirm ||
+        !read(context_.memory, scene + 0x20F8, confirm) || confirm ||
         !read(context_.memory, out.navigation + 6, busy) || busy ||
         !read(context_.memory, out.navigation + 5, open) || open > 1 || calls_.modal() != 0) return false;
     for (const auto active : out.active) if (active < 0 || active > 1) return false;
@@ -296,10 +301,10 @@ bool CategoryGenerations::tick_context(std::uintptr_t scene, Tick& out) {
 }
 bool CategoryGenerations::toggle_available() noexcept {
     if (!thread() || collecting_ || !current_ || current_->uncertain ||
-        current_->navigation < 0x4C0) return false;
+        current_->navigation < 0x4B8) return false;
     __try {
         Tick tick;
-        return tick_context(current_->navigation - 0x4C0, tick);
+        return tick_context(current_->navigation - 0x4B8, tick);
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 void CategoryGenerations::signal_ready(std::uintptr_t scene) noexcept {
@@ -358,10 +363,10 @@ void CategoryGenerations::refresh_filters(Generation& generation, int style, int
     // Refresh each existing filter independently. An unavailable/disabled
     // filter must not veto the toggle after custom roots have already changed.
     // Native owns its category storage; this pass neither writes nor aliases it.
-    constexpr std::array<int, 6> ids{110, 210, 211, 212, 213, 214};
+    constexpr std::array<int, 6> ids{119, 219, 220, 221, 222, 223};
     // Both production callers have validated style 0/1.
     for (const int id : ids) {
-        const auto at = generation.manager + 16 + sizeof(category_layout::Category) * (230ULL * style + id);
+        const auto at = generation.manager + 16 + sizeof(category_layout::Category) * (226ULL * style + id);
         if (id == skip || at == protected_category) continue;
         OriginalFilterState filter;
         if (read_saved_original_filter_state(context_.memory, context_.modules.game.range,
@@ -376,7 +381,7 @@ bool CategoryGenerations::change_preference(Selection& before, bool enabled) {
     const bool integer = native_level(before.manager, before.category, source, before.style);
     const bool custom = g.bank.owned(source, before.style);
     const bool level = before.group == 1 && (integer || custom);
-    int wanted_level = integer ? source - 5 : custom ? g.bank.level(source) : 0;
+    int wanted_level = integer ? source - 12 : custom ? g.bank.level(source) : 0;
     if (level && before.chart) {
         const int difficulty = before.active[0] ? before.p1 : before.p2;
         const auto* row = context_.catalog.find({before.song, before.style, difficulty});
@@ -409,11 +414,11 @@ bool CategoryGenerations::change_preference(Selection& before, bool enabled) {
             if (!g.roots->select_parent(wanted_level, before.style) || !g.roots->enter(wanted_level, before.style)) return false;
             target = g.bank.id(wanted_level, 1); // Native opens ALL and searches the original chart tuple.
         } else if (!enabled && before.chart) {
-            target = wanted_level + 5;
+            target = wanted_level + 12;
         } else {
             const auto category = calls_.selection.current(before.navigation);
             if (!pointer(category, sizeof(category_layout::Category)) || !read(context_.memory, category, target)) return false;
-            force_open = !enabled && before.open && target == wanted_level + 5 ? 1 : 0;
+            force_open = !enabled && before.open && target == wanted_level + 12 ? 1 : 0;
         }
         before.id = target;
         before.category = calls_.lookup(before.manager, target, before.style);
@@ -429,21 +434,21 @@ bool CategoryGenerations::change_preference(Selection& before, bool enabled) {
 bool CategoryGenerations::route_return(const CategoryLifeRequest& request) {
     if (!request.restore || !current_) return true;
     auto& g = *current_;
-    if (request.owner != g.navigation - 0x328) return true;
+    if (request.owner != g.navigation - 0x318) return true;
     if (request.refresh_restore) return route_style(request);
     if (!context_.state.view().enabled()) return true;
     if (returning_depth_ || initializing_depth_ || changing_ || restoring_ || requesting_) return false;
     const int mode = calls_.mode();
     if (!browsing_mode(mode)) return true;
     int group{};
-    if (!read(context_.memory, g.list + 0x84, group)) return false;
+    if (!selected_group_id(context_.memory, g.list, group)) return false;
     if (group != 1) return true; // Preserve native group overrides on entry.
     auto& target = *request.restore;
     int style{};
     if (!read(context_.memory, g.list + 0x78, style) || style < 0 || style > 1) return true;
     const auto category = calls_.lookup(g.manager, target.category, style);
-    const bool searched = target.category == 110 &&
-        category == g.manager + 16 + sizeof(category_layout::Category) * (230ULL * style + 110);
+    const bool searched = target.category == 119 &&
+        category == g.manager + 16 + sizeof(category_layout::Category) * (226ULL * style + 119);
     const bool private_id = g.bank.owned(target.category, style);
     const bool integer = native_level(g.manager, category, target.category, style);
     if (!searched && !private_id && !integer && !g.roots->page_level()) return true;
@@ -466,7 +471,7 @@ bool CategoryGenerations::route_return(const CategoryLifeRequest& request) {
         leaf = g.bank.part(target.category) != 0 &&
             g.bindings[before.style * CategoryBank::per_style + target.category - g.bank.base_id()].category;
     } else if (integer) {
-        level = target.category - 5;
+        level = target.category - 12;
         // A stock saved LEVEL may predate this launch's custom preference.
         // Resolve its actual native played tuple through the prepared catalogue;
         // absent/unrated rows retain the supplied integer as native fallback.
@@ -506,7 +511,7 @@ bool CategoryGenerations::returned() {
 bool CategoryGenerations::before_refresh(const CategoryLifeRequest& request) {
     auto view = context_.state.view();
     if (!request.refresh_boundary || !current_ ||
-        request.owner > UINTPTR_MAX - 0x4C0 || request.owner + 0x4C0 != current_->navigation) return true;
+        request.owner > UINTPTR_MAX - 0x4B8 || request.owner + 0x4B8 != current_->navigation) return true;
     if (view.phase != FeaturePhase::ready) return true;
     const int mode = calls_.mode();
     if (!browsing_mode(mode)) return true;
@@ -536,7 +541,7 @@ bool CategoryGenerations::before_refresh(const CategoryLifeRequest& request) {
     refresh_ = {&g, view, {}, old_style, mode};
     refreshing_depth_ = depth_;
     refreshing_style_ = destination;
-    if (!read(context_.memory, g.list + 0x84, refresh_.group) ||
+    if (!selected_group_id(context_.memory, g.list, refresh_.group) ||
         !read(context_.memory, context_.modules.game.range.base + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, refresh_.active)) return false;
     refresh_.level = refresh_.group == 1;
     for (const auto active : refresh_.active) if (active < 0 || active > 1) return false;
@@ -546,7 +551,7 @@ bool CategoryGenerations::before_refresh(const CategoryLifeRequest& request) {
     if (!g.roots->page_level() || g.roots->page_available(destination)) return true;
 
     int group{};
-    if (!read(context_.memory, g.list + 0x84, group)) return false;
+    if (!selected_group_id(context_.memory, g.list, group)) return false;
     if (group == 1) {
         CategoryRootSelection selected, closed;
         std::uint8_t open{};
@@ -595,14 +600,14 @@ bool CategoryGenerations::refresh_context(int style) {
     return read_scene_owner(context_.memory, context_.modules.game.range, manager, list, g.manager, g.list) &&
         read_scene_styles(context_.memory, manager, list, raw, normalized) &&
         raw == style && normalized == (style == 2 ? 0 : style) &&
-        read(context_.memory, list + 0x84, group) && group == r.group &&
+        selected_group_id(context_.memory, list, group) && group == r.group &&
         read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, dp) && dp == (refreshing_style_ != 0) &&
         read(context_.memory, game + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, active) && active == r.active;
 }
 bool CategoryGenerations::before_style(const CategoryLifeRequest& request) {
     if (!request.style_boundary || !refresh_.generation) return true;
     auto& g = *refresh_.generation;
-    if (request.owner != g.navigation - 0x328) return true;
+    if (request.owner != g.navigation - 0x318) return true;
     if (depth_ != refreshing_depth_ + 1 || refresh_.policy || !refresh_context(refresh_.source)) return false;
     if (!read(context_.memory, g.navigation + 5, refresh_.open) || refresh_.open > 1) return false;
     if (refresh_.source != 2 && refreshing_style_ != 2) {
@@ -630,13 +635,13 @@ bool CategoryGenerations::before_style(const CategoryLifeRequest& request) {
 }
 bool CategoryGenerations::after_style(const CategoryLifeRequest& request) {
     if (!request.style_boundary || !refresh_.generation ||
-        request.owner != refresh_.generation->navigation - 0x328) return true;
+        request.owner != refresh_.generation->navigation - 0x318) return true;
     if (depth_ != refreshing_depth_ + 1 || !refresh_.policy || refresh_.applied) return false;
     // Native63AAF0 can select its default group when the old group is absent
     // in the destination style. Accept that completed native choice here only;
     // the following restoration and outer completion must retain it.
     int group{};
-    if (!read(context_.memory, refresh_.generation->list + 0x84, group) || group < 0) return false;
+    if (!selected_group_id(context_.memory, refresh_.generation->list, group) || group < 0) return false;
     refresh_.group = group;
     if (!refresh_context(refreshing_style_)) return false;
     auto& g = *refresh_.generation;
@@ -649,13 +654,13 @@ bool CategoryGenerations::invalidate_refresh_cache(std::uintptr_t scene) noexcep
     // 8EC389..8EC3CC compares the cached requested style, stores style/BATTLE,
     // THEN calls refresh. Invalidating only that cache forces the next native
     // tick to retry; it neither replays refresh here nor changes actual style.
-    if (!pointer(scene, 0x2010)) return false;
+    if (!pointer(scene, 0x20F8)) return false;
     std::uintptr_t vtable{};
     if (!read(context_.memory, scene, vtable) || vtable != context_.modules.game.range.base + game_bindings(context_.modules.game.range).category_generations.scene_vtable_rva ||
-        !readable_range(context_.memory, scene + 0x200C, sizeof(int), RangeUse::private_writable)) return false;
+        !readable_range(context_.memory, scene + 0x20F4, sizeof(int), RangeUse::private_writable)) return false;
     const int invalid = -1; // Requested native style is always 0 or 1.
     __try {
-        std::memcpy(reinterpret_cast<void*>(scene + 0x200C), &invalid, sizeof(invalid));
+        std::memcpy(reinterpret_cast<void*>(scene + 0x20F4), &invalid, sizeof(invalid));
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
@@ -665,8 +670,8 @@ bool CategoryGenerations::repair_style(Generation& g) {
     const auto view = context_.state.view();
     if (g.uncertain || current_ != &g || view.phase != FeaturePhase::ready ||
         !read(context_.memory, context_.modules.game.range.base + game_bindings(context_.modules.game.range).category_generations.category_manager_rva, manager) || manager != g.manager ||
-        !read(context_.memory, g.manager + 0x175D0, list) || list != g.list ||
-        !read(context_.memory, g.manager + 0x2A424, style) || style != g.repair_style ||
+        !read(context_.memory, g.manager + 0x16F50, list) || list != g.list ||
+        !read(context_.memory, g.manager + 0x29864, style) || style != g.repair_style ||
         !read(context_.memory, g.list + 0x78, normalized) || normalized != (style == 2 ? 0 : style)) return false;
     if (view.preference && style != 2) {
         if (g.group_reference) {
@@ -688,7 +693,7 @@ void CategoryGenerations::retain_graphs(std::uintptr_t category) noexcept {
 }
 void CategoryGenerations::recover_failure(const CategoryLifeRequest& request, CategoryLifeOutcome outcome) noexcept {
     fault();
-    if (request.event == CategoryLifeEvent::initialize) {
+    if (request.event == CategoryLifeEvent::initialize || request.event == CategoryLifeEvent::queued_initialize) {
         reject_initialization();
         return;
     }
@@ -696,10 +701,10 @@ void CategoryGenerations::recover_failure(const CategoryLifeRequest& request, Ca
     if ((request.event != CategoryLifeEvent::style_apply && request.event != CategoryLifeEvent::scene_refresh) ||
         !current_ || outcome == CategoryLifeOutcome::unwound) return;
     auto& g = *current_;
-    const auto scene = g.navigation - 0x4C0;
+    const auto scene = g.navigation - 0x4B8;
     if ((request.event == CategoryLifeEvent::scene_refresh && (!request.refresh_boundary || request.owner != scene)) ||
         (request.event == CategoryLifeEvent::style_apply && (!request.style_boundary || !refresh_.generation ||
-            request.owner != g.navigation - 0x328))) return;
+            request.owner != g.navigation - 0x318))) return;
     // A native unwind provides no completed style receipt. Never retry an
     // uncertain vector owner. Clean cancellation/finished native style keeps
     // the generation and native caches coherent through an explicit retry.
@@ -709,7 +714,7 @@ void CategoryGenerations::recover_failure(const CategoryLifeRequest& request, Ca
     }
     if (g.uncertain) return;
     int style{}, normalized{};
-    if (!read(context_.memory, g.manager + 0x2A424, style) || style < 0 || style > 2 ||
+    if (!read(context_.memory, g.manager + 0x29864, style) || style < 0 || style > 2 ||
         !read(context_.memory, g.list + 0x78, normalized) || normalized != (style == 2 ? 0 : style)) {
         // A refused scalar observation does not make the already committed
         // scene cache a completion receipt. Retry ownership observation at a
@@ -722,7 +727,7 @@ void CategoryGenerations::recover_failure(const CategoryLifeRequest& request, Ca
 }
 bool CategoryGenerations::route_style(const CategoryLifeRequest& request) {
     if (!request.restore || !refresh_.generation ||
-        request.owner != refresh_.generation->navigation - 0x328) return true;
+        request.owner != refresh_.generation->navigation - 0x318) return true;
     if (depth_ != refreshing_depth_ + 1 || !refresh_.applied || refresh_.restored ||
         !refresh_context(refreshing_style_)) return false;
     auto& r = refresh_;
@@ -733,14 +738,14 @@ bool CategoryGenerations::route_style(const CategoryLifeRequest& request) {
     const bool integer = native_level(g.manager, calls_.lookup(g.manager, target.category, source), target.category, source);
     if ((r.source == 2 || refreshing_style_ == 2) && r.view.preference && r.level && r.group == 1 && (custom || integer)) {
         const int style = refreshing_style_ == 2 ? 0 : refreshing_style_;
-        int level = custom ? g.bank.level(target.category) : target.category - 5;
+        int level = custom ? g.bank.level(target.category) : target.category - 12;
         if (target.song > 0 && target.p1 >= 0 && target.p1 <= 4) {
             if (const auto* row = context_.catalog.find({target.song, style, target.p1}))
                 level = refreshing_style_ == 2 ? row->native_level : row->effective_tenths / 10;
         }
         target.force_open = r.open;
         if (refreshing_style_ == 2) {
-            target.category = level + 5;
+            target.category = level + 12;
             // Reopen only a surviving native LEVEL. For a missing ID, native's
             // close-and-fallback must stay closed rather than force-open index0.
             category_layout::Vector roots{}, same{};
@@ -772,14 +777,14 @@ bool CategoryGenerations::route_style(const CategoryLifeRequest& request) {
     // native's final restore; no extra navigation/fallback algorithm is added.
     const auto selected = calls_.selection.current(g.navigation);
     if (filtered(target.category) && selected == g.manager + 16 +
-        sizeof(category_layout::Category) * (230ULL * bank + target.category)) skip = target.category;
+        sizeof(category_layout::Category) * (226ULL * bank + target.category)) skip = target.category;
     refresh_filters(g, bank, skip, r.view.preference && refreshing_style_ != 2, 0);
     r.restored = true;
     return refresh_context(refreshing_style_);
 }
 
 bool CategoryGenerations::capture(Selection& out) {
-    if (!current_ || !pointer(current_->navigation, 0x448)) return false;
+    if (!current_ || !pointer(current_->navigation, 0x360)) return false;
     out.generation = current_;
     out.manager = current_->manager; out.list = current_->list; out.navigation = current_->navigation;
     out.view = context_.state.view();
@@ -793,7 +798,7 @@ bool CategoryGenerations::capture(Selection& out) {
     if (!read_scene_owner(context_.memory, game, manager, list, out.manager, out.list) ||
         !read_scene_styles(context_.memory, manager, list, out.style, list_style) ||
         out.style < 0 || out.style > 1 || list_style != out.style ||
-        !read(context_.memory, list + 0x84, out.group) || out.group < 0 ||
+        !selected_group_id(context_.memory, list, out.group) || out.group < 0 ||
         !read(context_.memory, game.base + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, out.dp) || out.dp != out.style ||
         !read(context_.memory, game.base + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, out.active) ||
         !read(context_.memory, out.navigation + 5, out.open) || out.open > 1 ||
@@ -842,7 +847,7 @@ void CategoryGenerations::restore_current(Selection& before, bool effective) {
     __try {
         // Native's one continuation owns filter, sort/search, graph and panels;
         // RAX is not a success boolean. Missing charts use native fallback.
-        (void)calls_.selection.restore(before.navigation - 0x328, before.id, before.song,
+        (void)calls_.selection.restore(before.navigation - 0x318, before.id, before.song,
             before.p1, before.p2, before.open, -1);
         completed = true;
     } __finally {
@@ -919,6 +924,7 @@ bool CategoryGenerations::begin(const CategoryLifeRequest& request) {
         return song != before.song || prepared != native || current_ != before.generation ||
             !same_view(context_.state.view(), before.view);
     }
+    if (request.construction_population) return true;
     if (collecting_ || summary_ || building_) { fault(); return false; }
     if (request.event == CategoryLifeEvent::style_apply) {
         const bool okay = before_style(request);
@@ -936,11 +942,22 @@ bool CategoryGenerations::begin(const CategoryLifeRequest& request) {
         if (!okay) fault();
         return okay;
     }
-    if (request.event == CategoryLifeEvent::initialize) {
-        if (initializing_depth_ || !pointer(request.owner, 0x448)) { fault(); return true; }
+    if (request.event == CategoryLifeEvent::queued_initialize) {
+        if (!request.initialize_boundary) return true;
+        if (initializing_depth_ || !pointer(request.owner, 0x818)) { fault(); return true; }
         initializing_depth_ = depth_;
         initialization_ready_ = false;
-        const auto graph = request.owner + 0x438;
+        initialization_detached_ = false;
+        initialization_manager_ = initialization_list_ = initialization_control_ = 0;
+        // Native34 replaces the manager pair inside navigation initialization.
+        // Withdraw while the old pair still identifies the published root owner.
+        if (current_ && current_->group_reference &&
+            (current_->uncertain || current_->manager != request.manager || current_->list != request.list ||
+             withdraw_roots(*current_) != Exchange::withdrawn)) {
+            current_->uncertain = true;
+            fault(); return true;
+        }
+        const auto graph = request.owner + 0x808;
         auto found = std::find_if(graphs_.begin(), graphs_.end(), [graph](const auto& g) { return g.owner == graph; });
         std::uintptr_t category{};
         if (!read(context_.memory, graph + 8, category)) { retain_graphs(); fault(); return true; }
@@ -949,13 +966,13 @@ bool CategoryGenerations::begin(const CategoryLifeRequest& request) {
             catch (...) { retain_graphs(); fault(); return true; }
         }
         else found->category = category;
-        initialization_ready_ = detach();
+        initialization_detached_ = detach();
         return true;
     }
-    if (request.event == CategoryLifeEvent::adopt && current_ && request.owner == current_->manager) {
-        std::uintptr_t incoming{};
-        if (!pointer(request.argument, 16) || !read(context_.memory, request.argument, incoming)) { fault(); return true; }
-        if (incoming != current_->list) (void)detach();
+    if (request.event == CategoryLifeEvent::initialize) {
+        if (request.initialize_boundary && initializing_depth_ && initialization_detached_)
+            initialization_manager_ = request.manager;
+        return true;
     }
     if (request.event == CategoryLifeEvent::list_destroy && current_ && request.owner == current_->list)
         (void)detach();
@@ -1022,14 +1039,26 @@ void CategoryGenerations::finish(const CategoryLifeRequest& request, CategoryLif
         ((refreshing_depth_ == depth_ && outcome == CategoryLifeOutcome::completed && !after_refresh()) ||
             (outcome == CategoryLifeOutcome::cancelled && (!refreshing_depth_ || refreshing_depth_ == depth_))))
         recover_failure(request, outcome);
-    if (request.event == CategoryLifeEvent::initialize && outcome == CategoryLifeOutcome::completed &&
-        initializing_depth_ == depth_ && initialization_ready_)
-        if (!initialize(request.owner)) reject_initialization();
+    if (request.event == CategoryLifeEvent::initialize && request.initialize_boundary &&
+        initializing_depth_ && initialization_detached_ && outcome == CategoryLifeOutcome::completed &&
+        request.manager == initialization_manager_) {
+        initialization_list_ = request.list;
+        initialization_control_ = request.control;
+        initialization_ready_ = true;
+    }
+    if (request.event == CategoryLifeEvent::queued_initialize && request.initialize_boundary &&
+        outcome == CategoryLifeOutcome::completed && initializing_depth_ == depth_ && initialization_ready_) {
+        std::uintptr_t manager{}, list{}, control{};
+        if (!read_scene_owner(context_.memory, context_.modules.game.range, manager, list,
+                initialization_manager_, initialization_list_) ||
+            !read(context_.memory, manager + 0x16F58, control) || control != initialization_control_ ||
+            !initialize(request.owner + 0x4B8)) reject_initialization();
+    }
 }
 bool CategoryGenerations::begin_checked(const CategoryLifeRequest& request) noexcept {
     try { return begin(request); }
     catch (...) {
-        if (request.event == CategoryLifeEvent::initialize || request.event == CategoryLifeEvent::graph_bind) retain_graphs();
+        if (request.event == CategoryLifeEvent::initialize || request.event == CategoryLifeEvent::queued_initialize || request.event == CategoryLifeEvent::graph_bind) retain_graphs();
         fault(); return false;
     }
 }
@@ -1045,7 +1074,7 @@ CategoryLifecycleHooks::Callbacks CategoryGenerations::lifecycle_callbacks() noe
             ++self.depth_;
             __try { return self.begin_checked(request); }
             __except (EXCEPTION_EXECUTE_HANDLER) {
-                if (request.event == CategoryLifeEvent::initialize || request.event == CategoryLifeEvent::graph_bind) self.retain_graphs();
+                if (request.event == CategoryLifeEvent::initialize || request.event == CategoryLifeEvent::queued_initialize || request.event == CategoryLifeEvent::graph_bind) self.retain_graphs();
                 self.fault(); return false;
             }
         },
@@ -1056,7 +1085,7 @@ CategoryLifecycleHooks::Callbacks CategoryGenerations::lifecycle_callbacks() noe
                 __try { self.finish_checked(request, outcome); }
                 __except (EXCEPTION_EXECUTE_HANDLER) { self.recover_failure(request, outcome); }
             } __finally {
-                if (request.event == CategoryLifeEvent::initialize && self.initializing_depth_ == self.depth_)
+                if (request.event == CategoryLifeEvent::queued_initialize && self.initializing_depth_ == self.depth_)
                     self.initializing_depth_ = 0;
                 if (request.event == CategoryLifeEvent::scene_refresh && self.refreshing_depth_ == self.depth_) {
                     self.refreshing_depth_ = 0;
@@ -1122,7 +1151,7 @@ bool CategoryGenerations::request_current(const Selection& before) {
     std::uint8_t busy{};
     return read_scene_owner(memory, context_.modules.game.range, manager, list, before.manager, before.list) &&
         read_scene_styles(memory, manager, list, style, list_style) && style == before.style && list_style == style &&
-        read(memory, list + 0x84, group) && group == before.group &&
+        selected_group_id(memory, list, group) && group == before.group &&
         read(memory, base + game_bindings(context_.modules.game.range).category_generations.dp_flag_rva, dp) && dp == before.dp &&
         read(memory, base + game_bindings(context_.modules.game.range).category_generations.active_flags_rva, active) && active == before.active &&
         read(memory, before.navigation + 6, busy) && !busy && same_view(context_.state.view(), before.view);
@@ -1151,7 +1180,7 @@ bool CategoryGenerations::close_request(Selection& before) {
 CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& request) {
     using Action = CategoryRequestAction;
     const CategoryRequestResult reject{Action::reject, request.category}, native{Action::native, request.category};
-    if (!current_ || request.selection != current_->navigation - 0x328) return native;
+    if (!current_ || request.selection != current_->navigation - 0x318) return native;
     auto& g = *current_;
     int style{};
     if (!read(context_.memory, g.list + 0x78, style) || style < 0 || style > 1) return native;
@@ -1185,7 +1214,7 @@ CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& 
     const bool heading_only = heading && request.kind == CategoryRequestKind::category;
     const int target = heading && request.kind == CategoryRequestKind::song ? request.category + 1 : request.category;
     if (owned) {
-        if (request.kind == CategoryRequestKind::rival) return reject; // Native rival always targets197.
+        if (request.kind == CategoryRequestKind::rival) return reject; // Native rival always targets206.
         const auto& binding = g.bindings[before.style * CategoryBank::per_style + target - g.bank.base_id()];
         if (!binding.category) return reject;
         if (!g.bank.owns(binding.category, target, before.style, before.list)) { fault(); return reject; }
@@ -1297,12 +1326,12 @@ void CategoryGenerations::graph_bound(std::uintptr_t graph) noexcept {
     }
 }
 void CategoryGenerations::selection_destroyed(std::uintptr_t selection, bool completed) noexcept {
-    if (!thread() || !pointer(selection, 0x780)) return;
-    const auto graph = selection + 0x760;
+    if (!thread() || !pointer(selection, 0x688)) return;
+    const auto graph = selection + 0x668;
     const auto found = std::find_if(graphs_.begin(), graphs_.end(), [graph](const auto& g) { return g.owner == graph; });
     if (found == graphs_.end()) return;
     if (!completed) { fault(); return; }
-    if (current_ && current_->navigation == selection + 0x328) (void)detach();
+    if (current_ && current_->navigation == selection + 0x318) (void)detach();
     graphs_.erase(found); // Identity only: never read the destroyed native owner.
 }
 bool CategoryGenerations::collect_checked() noexcept {

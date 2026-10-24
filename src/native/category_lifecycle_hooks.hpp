@@ -6,8 +6,8 @@
 
 namespace point_zero::native {
 enum class CategoryLifeEvent {
-    adopt, populate, list_destroy, group_destroy, initialize, graph_bind, selection_destroy, scene_entry, scene_tick,
-    scene_refresh, preview_assign, selection_restore, style_apply
+    queued_initialize, populate, list_destroy, group_destroy, initialize, graph_bind, selection_destroy, scene_entry, scene_tick,
+    scene_refresh, preview_assign, selection_restore, style_apply, queued_restore
 };
 enum class CategoryLifeOutcome { completed, cancelled, unwound, incomplete };
 struct CategoryRestoreTarget {
@@ -18,15 +18,8 @@ struct CategoryRestoreTarget {
 };
 struct CategoryLifeRequest {
     CategoryLifeEvent event;
-    // owner is the operation's native object (navigation for initialize, outer
-    // graph for graph_bind, selection member for selection_destroy, preview
-    // object for preview_assign, selection for selection_restore/style_apply).
-    // argument is adopt's borrowed shared-pair address, or initialize's selector
-    // represented as uint32_t, graph_bind's category pointer, or scene_tick's
-    // zero-extended DL flag, or preview_assign's signed int32 song represented
-    // as uint32_t, or selection_restore's ORIGINAL category represented as
-    // uint32_t; otherwise zero. Tick's R8 remains opaque in payload; restore's
-    // payload stays zero even when its target is changed.
+    // Queued callbacks expose their captured scene as owner; raw native RCX
+    // is forwarded separately. Other owners/arguments retain their native ABI.
     std::uintptr_t owner{}, argument{};
     std::uintptr_t payload{};
     // Set by the hook only for the admitted ordinary scene/caller route. Other
@@ -36,33 +29,38 @@ struct CategoryLifeRequest {
     // The native style/options refresh, before it captures category/song. Its
     // exact ordinary caller and scene type are required for custom preparation.
     bool refresh_boundary{};
-    // Only the exact navigation song-selection caller (game+608A7A) permits
+    // Only the exact navigation song-selection caller (game+5FB7B1) permits
     // preview cancellation. Unknown callers still hold an observed scope.
     bool preview_boundary{};
-    // Borrowed mutable target only for either exact admitted restore caller.
+    // Borrowed mutable target only for an exact admitted queued-return or refresh caller.
     // Access is valid ONLY during begin/finish; never retain this pointer.
     // Only category/force_open may be adjusted. The remaining fields are
     // read-only original-argument snapshots; native always receives their
     // original values. Finish sees the target even on cancellation/unwinding;
     // finish changes cannot replay or alter native work already performed.
     CategoryRestoreTarget* restore{};
-    // Exact game+8EC7C1 caller of selection style application (game+607D80).
+    // Exact game+8D9091 caller of selection style application (game+5FAB40).
     // Native refresh has already captured its old selection tuple. The owner
     // validates the entered refresh before exchanging roots; no scene read here.
     bool style_boundary{};
-    // Exact game+8EC7EF caller of selection_restore, later in native refresh.
+    // Exact game+8D90BF caller of selection_restore, later in native refresh.
     // Native owns that restore call; this flag only identifies its route.
     bool refresh_restore{};
+    // The queued callback is identified before translating its raw RCX to scene.
+    bool initialize_boundary{}, construction_population{};
+    std::uintptr_t manager{}, list{}, control{}; // Actual pair around the inlined replacement.
 };
 struct CategoryLifeSite { std::uintptr_t address{}; std::vector<std::byte> body; };
 struct CategoryLifeSites {
-    std::array<CategoryLifeSite, 13> entries; // Event order; preview 800C70, restore 607F30, style 607D80.
+    std::array<CategoryLifeSite, 13> entries; // queued_initialize through style_apply.
+    CategoryLifeSite queued_restore;
+    std::uintptr_t queue_caller{}, initialize_vtable{}, restore_vtable{}, restore_invoke{}, manager_slot{};
+    std::uintptr_t restore_caller{};
     std::uintptr_t initialize_caller{}; // Exact supported navigation-initializer return address.
     std::uintptr_t scene_entry_caller{}, scene_tick_caller{}, scene_vtable{}, idle_callback{};
     std::uintptr_t scene_refresh_caller{}; // Within the admitted scene_tick body.
-    std::uintptr_t preview_caller{}; // Exact game+608A7A return address.
-    std::uintptr_t restore_caller{}; // Exact game+8EB6F0 return address, supplied by the contract.
-    std::uintptr_t style_apply_caller{}, style_restore_caller{}; // Exact game+8EC7C1 / game+8EC7EF.
+    std::uintptr_t preview_caller{}; // Exact game+5FB7B1 return address.
+    std::uintptr_t style_apply_caller{}, style_restore_caller{}; // Exact game+8D9091 / game+8D90BF.
 };
 
 // Native category boundaries, not a generation registry. The initializer is
@@ -79,16 +77,11 @@ public:
         // before native work, returning zero with a paired cancelled finish.
         // Other operations, including unknown refresh/style/preview/restore callers, always
         // forward native once. Returning true preserves native RAX.
-        // Adoption consumes argument's shared reference: copy needed values
-        // here; never dereference that borrowed pair in finish.
         bool (*begin)(void*, const CategoryLifeRequest&) noexcept{};
         // Paired even for cancellation/native unwinding. A destructor's owner
         // address is identity only here; the object may already be destroyed.
-        // Adoption completion does NOT mean native scene setup has finished.
-        // Successful initialize completion is AFTER population, style, working
-        // preferences and navigation initialization, but BEFORE the enclosing
-        // selection initializer restores category/song or updates its panels.
-        // It permits a bank/root transaction; it is not a completed-scene signal.
+        // Inner initialize completion records list/control replacement. Publication
+        // follows the whole qualified queued_initialize callback with nonzero AL.
         // graph_bind completion may be a guarded return: inspect actual graph+8,
         // not argument. selection_destroy completion is terminal owner identity;
         // never read destroyed selection/graph storage. Neither authorizes bank
@@ -102,7 +95,7 @@ public:
     ~CategoryLifecycleHooks() noexcept;
     CategoryLifecycleHooks(const CategoryLifecycleHooks&) = delete;
     CategoryLifecycleHooks& operator=(const CategoryLifecycleHooks&) = delete;
-    void arm(); // One attempt; all thirteen patch sites checked before enabling.
+    void arm(); // One attempt; all patch sites checked before enabling.
     bool intact() const noexcept;
     // Drains entered native transactions and their nested lifecycle calls.
     // Never call from a callback or an entered native transaction. After return,

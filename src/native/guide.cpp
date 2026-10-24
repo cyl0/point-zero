@@ -7,10 +7,12 @@
 
 #include <windows.h>
 #include <intrin.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstring>
 #include <stdexcept>
+#include <string_view>
 
 namespace point_zero::native {
 namespace {
@@ -74,7 +76,7 @@ bool custom_name(const char* name) noexcept {
 } // namespace
 
 struct NativeGuide::State {
-    using Build = std::uintptr_t (__fastcall*)(std::uintptr_t, Strings*);
+    using Build = void (__fastcall*)(std::uintptr_t, Strings*);
     using Copy = std::uintptr_t (__fastcall*)(String*, const String*);
     using Grow = std::uintptr_t (__fastcall*)(Strings*, String*, const String*);
     static std::atomic<State*> live;
@@ -127,7 +129,7 @@ struct NativeGuide::State {
             value = users.load(std::memory_order_acquire);
         }
     }
-    void append(std::uintptr_t guide, Strings* output) {
+    void add_hint(std::uintptr_t guide, Strings* output) {
         if (!browsing.toggle_available()) return;
         String item{};
         const auto name = names[language(guide)];
@@ -138,25 +140,34 @@ struct NativeGuide::State {
             copy(output->end, &item);
             ++output->end;
         }
+        // Native growth may relocate the vector. Reorder afterwards, moving
+        // complete string representations without changing native ownership.
+        auto* added = output->end - 1;
+        for (auto* hint = output->begin; hint != added; ++hint) {
+            if (hint->capacity >= sizeof(hint->data)) continue;
+            const std::string_view native_name(hint->data, hint->size);
+            if (native_name == "sort9_on" || native_name == "sort9_off") {
+                std::rotate(hint, added, output->end);
+                break;
+            }
+        }
     }
-    void append_checked(std::uintptr_t guide, Strings* output) noexcept {
+    void add_hint_checked(std::uintptr_t guide, Strings* output) noexcept {
         // Optional decoration failure must not change the shared rating gate.
-        try { append(guide, output); } catch (...) {}
+        try { add_hint(guide, output); } catch (...) {}
     }
-    void append_guarded(std::uintptr_t guide, Strings* output) noexcept {
-        __try { append_checked(guide, output); }
+    void add_hint_guarded(std::uintptr_t guide, Strings* output) noexcept {
+        __try { add_hint_checked(guide, output); }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
-    static std::uintptr_t __fastcall build(std::uintptr_t guide, Strings* output) {
+    static void __fastcall build(std::uintptr_t guide, Strings* output) {
         auto& self = *live.load(std::memory_order_acquire);
         if (reinterpret_cast<std::uintptr_t>(_ReturnAddress()) != self.build_caller || !self.enter())
             return self.original_build(guide, output);
-        std::uintptr_t result{};
         __try {
-            result = self.original_build(guide, output);
-            self.append_guarded(guide, output);
+            self.original_build(guide, output);
+            self.add_hint_guarded(guide, output);
         } __finally { self.leave(); }
-        return result;
     }
     static void create(safetyhook::Context& registers) noexcept {
         auto& self = *live.load(std::memory_order_acquire);

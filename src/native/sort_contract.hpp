@@ -9,7 +9,7 @@ struct SortContract {
     SortHookSite hook;
 };
 
-// Read-only admission of the finite LDJ-010-2026081900 visible-sort slice.
+// Read-only admission of the selected build's finite visible-sort slice.
 // Requires a structurally inspected, retained game image. Throws on changed
 // selected instructions, bounds, allocation or permissions; calls no native function and
 // installs no hook. Returns typed mode/comparator addresses and owned qsort

@@ -64,6 +64,36 @@ bool find_level_group(MemoryView memory, ImageRange, std::uintptr_t list,
     return group != 0;
 }
 
+bool selected_group_id(MemoryView memory, std::uintptr_t list, int& id) noexcept {
+    id = -1;
+    int selected{}, index{}, wanted{};
+    Vector ids{};
+    if (!pointer(list, 0x88) || !read(memory, list + 0x78, selected) || selected < 0 || selected > 1 ||
+        !read(memory, list + 0x7C, index) || index < 0 ||
+        !read(memory, list + 0x48 + 0x18ULL * selected, ids) || !pointer(ids.begin) ||
+        ids.begin > ids.end || ids.end > ids.capacity ||
+        (ids.end - ids.begin) % 4 || (ids.capacity - ids.begin) % 4 ||
+        (ids.capacity - ids.begin) / 4 > limit ||
+        static_cast<std::size_t>(index) >= (ids.end - ids.begin) / 4 ||
+        !read(memory, ids.begin + 4ULL * index, wanted)) return false;
+    std::uintptr_t head{}, node{}, found{};
+    if (!read(memory, list + 0x10, head) || !pointer(head, 8) || !read(memory, head, node)) return false;
+    for (unsigned n = 0; node != head; ++n) {
+        std::uintptr_t next{}, value{};
+        int key{}, actual{};
+        if (n >= 64 || !pointer(node, 32) || !read(memory, node, next) ||
+            !read(memory, node + 16, key) || !read(memory, node + 24, value)) return false;
+        if (key == wanted) {
+            if (found || !pointer(value, 16) || !read(memory, value + 8, actual) || actual != wanted) return false;
+            found = value;
+        }
+        node = next;
+    }
+    if (!found) return false;
+    id = wanted;
+    return true;
+}
+
 struct CategoryRoots::Backing {
     MemoryView memory;
     ImageRange game;
@@ -100,9 +130,9 @@ struct CategoryRoots::Backing {
         return index >= 0 && categories[style][index] == value.pointer;
     }
     int native_level(Entry value, int style) const noexcept {
-        return value.id >= 6 && value.id <= 17 &&
-            value.pointer == manager + 16 + sizeof(category_layout::Category) * (230ULL * style + value.id)
-            ? value.id - 5 : 0;
+        return value.id >= 13 && value.id <= 24 &&
+            value.pointer == manager + 16 + sizeof(category_layout::Category) * (226ULL * style + value.id)
+            ? value.id - 12 : 0;
     }
     Entry parent(Entry value, int style) const noexcept {
         const int level = native_level(value, style);
@@ -183,15 +213,15 @@ struct CategoryRoots::Backing {
     bool current() const noexcept {
         std::uintptr_t m{}, l{}, found{};
         return read(memory, game.base + game_bindings(game).category_roots.category_manager_rva, m) && m == manager &&
-            read(memory, manager + 0x175D0, l) && l == list &&
+            read(memory, manager + 0x16F50, l) && l == list &&
             find_level_group(memory, game, list, found, group);
     }
     bool visible(Visible& out) const noexcept { return read(memory, group + 0x78, out); }
     bool selected(int style) const noexcept {
         int manager_style{}, list_style{}, group_id{};
-        return read(memory, manager + 0x2A424, manager_style) && manager_style == style &&
+        return read(memory, manager + 0x29864, manager_style) && manager_style == style &&
             read(memory, list + 0x78, list_style) && list_style == style &&
-            read(memory, list + 0x84, group_id) && group_id == 1;
+            selected_group_id(memory, list, group_id) && group_id == 1;
     }
     bool write(const Visible& value) noexcept {
         if (!readable_range(memory, group + 0x78, sizeof(value), RangeUse::private_writable)) return false;
@@ -313,7 +343,7 @@ bool CategoryRoots::prepare_checked(std::uintptr_t manager, std::uintptr_t list,
     auto& b = *backing_;
     b.state = CategoryRootsState::rejected;
     try {
-        if (!pointer(manager, 0x2A428) || !pointer(list, 0x88) || !pointer(group, 0xB0)) return false;
+        if (!pointer(manager, 0x29868) || !pointer(list, 0x88) || !pointer(group, 0xB0)) return false;
         b.manager = manager; b.list = list; b.group = group;
         if (!b.snapshot(bank)) return false;
         for (int s = 0; s < 2; ++s) if (!b.build(b.projected[s], b.values[s])) {
@@ -629,7 +659,7 @@ bool CategoryRoots::selection(CategoryRootSelection& out) const noexcept {
         CategoryRootSelection value;
         Visible visible;
         Entry entry;
-        if (!b.current() || !read(b.memory, b.manager + 0x2A424, value.style) ||
+        if (!b.current() || !read(b.memory, b.manager + 0x29864, value.style) ||
             value.style < 0 || value.style > 1 || !b.selected(value.style) || !b.visible(visible)) return false;
         const auto& vector = visible.vectors[value.style];
         value.cursor = visible.cursors[value.style];

@@ -58,24 +58,15 @@ bool stepup(MemoryView memory, ImageRange game, const PlayedCapture& capture,
     out.player = mode.sole;
     if (!read_stepup_source_identity(memory, game, capture.owner, source)) return false;
     out.resource = source.resource; out.package = source.package; out.layer = source.layer;
-    return read_field(memory, capture.owner, 56, out.music) &&
-        read_field(memory, capture.owner, 64, out.style) &&
-        read_field(memory, capture.owner, 68, out.difficulty) &&
-        read_field(memory, capture.owner, 72, out.level) && published(memory, game, out);
+    return read_field(memory, capture.owner, 0x30, out.music) &&
+        read_field(memory, capture.owner, 0x38, out.style) &&
+        read_field(memory, capture.owner, 0x3C, out.difficulty) &&
+        read_field(memory, capture.owner, 0x40, out.level) && published(memory, game, out);
 }
 bool observe(MemoryView memory, ImageRange game, const PlayedCapture& capture,
              PlayedCaptureKind kind, const Mode& mode, Observation& out) noexcept {
     if (capture.owner < 0x10000) return false;
-    if (kind == PlayedCaptureKind::confirmation_first || kind == PlayedCaptureKind::confirmation_second) {
-        const unsigned copy = kind == PlayedCaptureKind::confirmation_second ? 1U : 0U;
-        if (copy && mode.count != 2) return false;
-        out.player = mode.count == 1 ? mode.sole : static_cast<int>(copy);
-        if (!read_field(memory, capture.owner, 40, out.music) ||
-            !read_field(memory, capture.owner, 48, out.style) ||
-            !read_field(memory, capture.owner, 52 + 4 * copy, out.difficulty) ||
-            !read_field(memory, capture.owner, 60 + 4 * copy, out.level) ||
-            !read_field(memory, capture.owner, 8, out.layer)) return false;
-    } else if (kind == PlayedCaptureKind::stepup) {
+    if (kind == PlayedCaptureKind::stepup) {
         if (!stepup(memory, game, capture, mode, out)) return false;
     } else {
         out.music = capture.music; out.player = capture.player;
@@ -119,10 +110,7 @@ bool resolve(MemoryView memory, ImageRange game, const Catalog& catalog,
     candidate.player = first.player; candidate.players = mode.count; candidate.chart = row;
     candidate.sole = mode.sole;
     candidate.resource = first.resource; candidate.package = first.package;
-    if (kind == PlayedCaptureKind::confirmation_first || kind == PlayedCaptureKind::confirmation_second) {
-        candidate.surface = played_art::Surface::confirmation;
-        candidate.leaf = kind == PlayedCaptureKind::confirmation_second ? "decide_diff_num_2p" : "decide_diff_num_1p";
-    } else if (kind == PlayedCaptureKind::stepup) {
+    if (kind == PlayedCaptureKind::stepup) {
         candidate.surface = played_art::Surface::stepup;
         candidate.leaf = "diff";
     } else if (kind == PlayedCaptureKind::hud) {
@@ -146,15 +134,13 @@ PlayedCaptureKind played_capture_kind(const PlayedCapture& capture, ImageRange g
     using enum PlayedCaptureKind;
     if (capture.kind != unknown) {
         switch (capture.kind) {
-        case confirmation_first: case confirmation_second: case hud: case result: case stepup:
+        case hud: case result: case stepup:
             return capture.kind;
         default: return unknown;
         }
     }
     if (game.base < 0x10000 || !contains(game.base, game.size, capture.site, 1)) return unknown;
     const auto site = capture.site - game.base;
-    if (site == game_bindings(game).played_chart.decide_first) return confirmation_first;
-    if (site == game_bindings(game).played_chart.decide_second) return confirmation_second;
     if (site == game_bindings(game).played_chart.hud_site) return hud;
     if (site == game_bindings(game).played_chart.result_site) return result;
     if (site == game_bindings(game).played_chart.stepup_site) return stepup;

@@ -8,13 +8,15 @@ struct SurfaceHookSite {
     std::uintptr_t address{};
     std::vector<std::byte> body; // Complete expected displaced entry instructions.
 };
-struct SurfaceHookSites { SurfaceHookSite cup, bitmap; };
+struct SurfaceHookSites { SurfaceHookSite cup, bitmap, cup_setter, confirmation_setter, confirmation; };
 
-// The selected cup update and shared AFP bitmap setter. This is not admission
+// The selected primary/confirmation setters and updates, and shared AFP bitmap setter. This is not admission
 // of the other surfaces, native folders or the complete adapter factory.
 class SurfaceHooks final {
 public:
     using Cup = std::int64_t (__fastcall*)(std::uintptr_t);
+    using CupSetter = std::int64_t (__fastcall*)(std::uintptr_t, std::uintptr_t, int, std::uint8_t);
+    using ConfirmationSetter = std::int64_t (__fastcall*)(std::uintptr_t, std::uintptr_t, int, int);
     using Bitmap = int (__fastcall*)(int, const char*, int);
     struct Callbacks {
         void (*begin_cup)(void*, std::uintptr_t) noexcept{};
@@ -22,9 +24,15 @@ public:
         // name is a bounded local NUL-terminated copy (at most95 characters).
         // true means handled, possibly by calling the supplied original once.
         bool (*bitmap)(void*, int, const char*, int, int&, Bitmap) noexcept{};
+        void (*begin_cup_set)(void*) noexcept{};
+        void (*bind_cup)(void*, std::uintptr_t, std::uintptr_t) noexcept{};
+        void (*begin_confirmation_set)(void*) noexcept{};
+        void (*bind_confirmation)(void*, std::uintptr_t, std::uintptr_t, std::uintptr_t) noexcept{};
+        void (*begin_confirmation)(void*, std::uintptr_t, std::uintptr_t) noexcept{};
+        void (*end_confirmation)(void*) noexcept{};
     };
 
-    // Creates both hooks disabled; validates displaced prefixes and owned bridges.
+    // Creates hooks disabled; validates displaced prefixes and owned bridges.
     // No native callback or process publication occurs during construction.
     SurfaceHooks(MemoryView, const SurfaceHookSites&, void* context, Callbacks);
     ~SurfaceHooks() noexcept;
@@ -35,8 +43,8 @@ public:
 
     // One attempt including rejected preflight. Call on the admitted native
     // menu thread: only that thread invokes callbacks; other threads forward.
-    // Both originals are always callable before either entry is exposed. Until
-    // BOTH owned patches pass postcheck, all entries only forward stock calls.
+    // All originals are callable before any entry is exposed. Until all
+    // owned patches pass postcheck, entries only forward stock calls.
     // Failed enable retains backing and permanently consumes the process slot.
     void arm();
     [[nodiscard]] bool intact() const noexcept;

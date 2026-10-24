@@ -9,15 +9,17 @@ namespace point_zero::native {
 class PlayedRenderer final {
 public:
     static constexpr std::string_view family = "/pz_played.ifs";
+    static constexpr std::string_view result_family = "/pz34_results.ifs";
+    static constexpr std::string_view stepup_family = "/pz34_stepup.ifs";
     PlayedRenderer(const AdapterContext&, PlayedNativeCalls);
     ~PlayedRenderer() = default; // Never detaches/releases native resources.
     PlayedRenderer(const PlayedRenderer&) = delete;
     PlayedRenderer& operator=(const PlayedRenderer&) = delete;
     PlayedRenderer(PlayedRenderer&&) = delete;
     PlayedRenderer& operator=(PlayedRenderer&&) = delete;
-    // Resolve every image and both containers during preparation, before any
-    // native publication. Slot is borrowed from the private AssetOwner.
-    bool preload(std::uintptr_t slot) noexcept;
+    // Resolve the exact archives before publication. Slots are borrowed from
+    // AssetOwner; HUD retains pz_played, results/StepUp use34 art.
+    bool preload(std::uintptr_t slot, std::uintptr_t result_slot, std::uintptr_t stepup_slot) noexcept;
     // Admitted native capture boundary: remember result tuples for NOTES and
     // extend an already-placed result plate before the numeral binds.
     void capture(const PlayedCapture&, PlayedStockBitmap) noexcept;
@@ -49,8 +51,9 @@ private:
     ResultNotes notes_;
     std::array<Image, played_art::image_count> images_{};
     std::array<Owner, 32> owners_{};
-    std::uintptr_t slot_{};
-    std::uint32_t package_{}, component_{}, thread_{};
+    std::array<std::uintptr_t, 3> slots_{};
+    std::array<std::uint32_t, 3> packages_{}, components_{};
+    std::uint32_t thread_{};
     bool attempted_{}, ready_{}, current_valid_{};
     std::uint64_t mutations_{}; // Native writes, including nested calls, for SEH fallback ownership.
     unsigned depth_{};
@@ -59,7 +62,7 @@ private:
     bool live() const;
     std::atomic_flag warned_{};
     void fault() noexcept;
-    bool preload_impl(std::uintptr_t);
+    bool preload_impl(std::uintptr_t, std::uintptr_t, std::uintptr_t);
     bool owned(const Owner&) const;
     Owner* find(int) noexcept;
     void collect();

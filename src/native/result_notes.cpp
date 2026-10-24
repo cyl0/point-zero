@@ -35,8 +35,8 @@ bool ResultNotes::prepare() noexcept {
     attempted_ = true;
     if (state_.view().phase != FeaturePhase::preparing) return false;
     prepared_ = memory_.read &&
-        afp_.base >= 0x10000 && 0xE1144 <= UINTPTR_MAX - afp_.base &&
-        contains(afp_.base, afp_.size, afp_.base + 0xE1144, sizeof(std::uint64_t)) &&
+        afp_.base >= 0x10000 && 0xF23E4 <= UINTPTR_MAX - afp_.base &&
+        contains(afp_.base, afp_.size, afp_.base + 0xF23E4, sizeof(std::uint64_t)) &&
         played_art::notes_roles().size() == 6;
     return prepared_;
 }

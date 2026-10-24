@@ -31,15 +31,11 @@ struct CodeView {
     std::uint32_t age{};
 };
 static_assert(sizeof(CodeView) == 24);
-// Raw GUID bytes in the retained 2026081900 bm2dx CodeView RSDS record.
-constexpr GameBuildIdentity tested_2026081900{
-    0x6a713632, 0x0bb95000, 0x00b1cccc,
-    {0xe7, 0xd4, 0x62, 0x31, 0xe0, 0x2f, 0x64, 0x4c,
-     0xb3, 0xdf, 0x93, 0x60, 0x4f, 0x09, 0x51, 0x54}, 1};
-constexpr GameBuildIdentity tested_2026090900{
-    0x6a8bafd1, 0x0bb93000, 0x00b1ba0c,
-    {0x7e, 0xf4, 0xba, 0xff, 0x61, 0x97, 0x2e, 0x47,
-     0x8e, 0x2d, 0x10, 0x63, 0xc7, 0x94, 0x4f, 0xf3}, 1};
+// Raw GUID bytes in the retained 2026101300 bm2dx CodeView RSDS record.
+constexpr GameBuildIdentity tested_2026101300{
+    0x6AC5F8CE, 0x0C5FE000, 0x00B0294C,
+    {0x27, 0x07, 0x78, 0x2B, 0x5F, 0x45, 0x9B, 0x4E,
+     0xBA, 0xD3, 0x75, 0xE7, 0x65, 0x5F, 0x82, 0xCC}, 1};
 } // namespace
 
 GameBuildIdentity inspect_game_build(MemoryView memory, const ImageInfo& image) {
@@ -88,20 +84,12 @@ GameBuildIdentity inspect_game_build(MemoryView memory, const ImageInfo& image) 
 
 namespace {
 constexpr GameBuild builds[]{
-    {tested_2026081900, "2026081900", &august_bindings},
-    {tested_2026090900, "2026090900", &september_bindings},
+    {tested_2026101300, "2026101300", &october_bindings},
 };
-}
-std::string_view supported_game_datecode(const GameBuildIdentity& identity) noexcept {
-    for (const auto& build : builds) if (build.identity == identity) return build.datecode;
-    return {};
 }
 const GameBuild& select_game_build(MemoryView memory, const ImageInfo& image) {
     const auto identity = inspect_game_build(memory, image);
     for (const auto& build : builds) if (build.identity == identity) return build;
     throw std::runtime_error("unsupported bm2dx build; no qualified binding profile");
-}
-std::string_view check_game_build(MemoryView memory, const ImageInfo& image) {
-    return select_game_build(memory, image).datecode;
 }
 } // namespace point_zero::native

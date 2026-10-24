@@ -1,6 +1,9 @@
 #pragma once
 
 #include "cup.hpp"
+#include "confirmation.hpp"
+#include "assistant.hpp"
+#include "dan.hpp"
 #include "list.hpp"
 #include "played.hpp"
 #include "played_hooks.hpp"
@@ -9,7 +12,9 @@
 namespace point_zero::native {
 class NativeSurfaces final {
 public:
-    static constexpr std::array families{CupRenderer::family, ListRenderer::family, PlayedRenderer::family};
+    static constexpr std::array families{CupRenderer::family, ListRenderer::family, PlayedRenderer::family,
+        ConfirmationRenderer::family, PlayedRenderer::result_family, PlayedRenderer::stepup_family,
+        AssistantRenderer::family};
     using AssetSlots = std::array<std::uintptr_t, families.size()>;
     explicit NativeSurfaces(const AdapterContext&) noexcept;
     ~NativeSurfaces() noexcept;
@@ -38,18 +43,22 @@ private:
     std::unique_ptr<CupRenderer> cup_;
     std::unique_ptr<ListRenderer> list_;
     std::unique_ptr<PlayedRenderer> played_;
+    std::unique_ptr<ConfirmationRenderer> confirmation_;
+    std::unique_ptr<AssistantRenderer> assistant_;
+    std::unique_ptr<DanRenderer> dan_;
     // Reverse destruction and explicit drain keep bitmap forwarding alive
     // throughout every entered played capture/named scope.
     std::unique_ptr<SurfaceHooks> surface_hooks_;
     std::unique_ptr<ListHook> list_hook_;
     std::unique_ptr<ListTitleHook> title_hook_;
     std::unique_ptr<PlayedHooks> played_hooks_;
+    std::unique_ptr<AssistantHeaderHook> assistant_hook_;
     SurfaceHooks::Bitmap stock_bitmap_{};
     enum class ArmState { unattempted, attempted, armed };
-    std::array<ArmState, 4> arms_{};
+    std::array<ArmState, 5> arms_{};
     std::uint32_t thread_{};
     bool prepare_attempted_{}, prepared_{}, activation_attempted_{}, retired_{};
-    bool cup_ready_{}, played_ready_{};
+    bool cup_ready_{}, played_ready_{}, confirmation_ready_{}, assistant_ready_{}, dan_ready_{};
 
     void preparing() const;
     void begin_activation();

@@ -6,150 +6,23 @@
 namespace point_zero::native::played_art::detail {
 // Provenance: 09_outputs/research_v1_playlister51_20261001/candidate/source/src/
 // played_slot_bank.hpp selects point_zero_played_bank.hpp with
-// IIDX_POINT_ZERO_INPUTS. Only records used by ordinary make(1..3, 0..4, 10..129)
-// are retained here; private package names and every bitmap metric are unchanged.
+// IIDX_POINT_ZERO_INPUTS. Only HUD/result records are retained here;
+// private package names and every live bitmap metric are unchanged.
 // Extents describe native drawable quads, excluding atlas extrusion. The saved
 // native PNG exports include one extra pixel on every edge; final SVG exports
 // declare their own bitmap extent directly. Do not add that atlas gutter here.
-// Each confirmation/result family: wholes 1..12, fractions 0..9, point.
+// Each result family: wholes 1..12, fractions 0..9, point.
 // HUD: native numerals 0..12, point. No zero whole, unused point or two-digit
-// fraction from the other families is needed. All 244 entries are reachable.
+// fraction from the other families is needed. All 129 entries are reachable.
 // Completed missing native-family art retains its reconstructed provenance:
 // 09_outputs/research_v1_data_assets_20260922/README.md.
-// Final confirmation fractions/points and measured visible-face baselines:
-// 09_outputs/research_v1_playtest_followup_20260926/confirmation-art/
-// integration-metadata.json (final-render/pz_csvg_*; never the cup atlas).
-// Narrow 1's bearing is baked into its final texture/advance. Its dx=0 is the
-// authored metric, not a renderer alignment correction. No new art is synthesized.
 // point_zero_played_bank.hpp SHA-256:
 // 4d867029afd34d5df669712a923d76b899ece1559acc48702a7ddd96bc54c2a8
-// point_zero_confirmation_metrics.hpp SHA-256:
-// 5f8b038ecc3402125c2d42d472e9bd6fa1a85d6e442416ee9b74162014347df5
 inline constexpr int family_images = 23;
-inline constexpr int hud_begin = 5 * family_images;
+inline constexpr int hud_begin = 0;
 inline constexpr int result_begin = hud_begin + 14;
 inline constexpr float result_left_bearing[5][2]{{27, 27}, {34, 34}, {45, 45}, {28, 25}, {4, 0}};
 inline constexpr Image image_table[] = {
-    // Confirmation, family 0.
-    {"ps_decide_diff_b01", 36, 71, 26, 7},
-    {"ps_decide_diff_b02", 51, 71, 18, 7},
-    {"ps_decide_diff_b03", 51, 72, 18, 7},
-    {"ps_decide_diff_b04", 63, 70, 12, 8},
-    {"ps_decide_diff_b05", 53, 71, 17, 8},
-    {"ps_decide_diff_b06", 55, 72, 16, 7},
-    {"ps_decide_diff_b07", 57, 71, 15, 8},
-    {"ps_decide_diff_b08", 53, 72, 17, 7},
-    {"ps_decide_diff_b09", 55, 72, 16, 7},
-    {"ps_decide_diff_b10", 82, 72, 3, 7},
-    {"ps_decide_diff_b11", 70, 71, 9, 7},
-    {"ps_decide_diff_b12", 77, 71, 5, 7},
-    {"pz_csvg_f0_0", 40, 46, 0, 0},
-    {"pz_csvg_f0_1", 33, 45, 0, 0},
-    {"pz_csvg_f0_2", 34, 45, 0, 0},
-    {"pz_csvg_f0_3", 34, 46, 0, 0},
-    {"pz_csvg_f0_4", 41, 44, 0, 0},
-    {"pz_csvg_f0_5", 35, 45, 0, 0},
-    {"pz_csvg_f0_6", 36, 46, 0, 0},
-    {"pz_csvg_f0_7", 37, 45, 0, 0},
-    {"pz_csvg_f0_8", 35, 46, 0, 0},
-    {"pz_csvg_f0_9", 36, 46, 0, 0},
-    {"pz_csvg_p0", 15, 16, 0, 0},
-    // Confirmation, family 1.
-    {"ps_decide_diff_n01", 36, 71, 26, 7},
-    {"ps_decide_diff_n02", 51, 71, 18, 7},
-    {"ps_decide_diff_n03", 51, 72, 18, 7},
-    {"ps_decide_diff_n04", 63, 70, 12, 8},
-    {"ps_decide_diff_n05", 53, 71, 17, 8},
-    {"ps_decide_diff_n06", 55, 72, 16, 7},
-    {"ps_decide_diff_n07", 57, 71, 15, 8},
-    {"ps_decide_diff_n08", 53, 72, 17, 7},
-    {"ps_decide_diff_n09", 55, 72, 16, 7},
-    {"ps_decide_diff_n10", 82, 72, 3, 7},
-    {"ps_decide_diff_n11", 70, 71, 9, 7},
-    {"ps_decide_diff_n12", 77, 71, 5, 7},
-    {"pz_csvg_f1_0", 40, 46, 0, 0},
-    {"pz_csvg_f1_1", 33, 45, 0, 0},
-    {"pz_csvg_f1_2", 34, 45, 0, 0},
-    {"pz_csvg_f1_3", 34, 46, 0, 0},
-    {"pz_csvg_f1_4", 41, 44, 0, 0},
-    {"pz_csvg_f1_5", 35, 45, 0, 0},
-    {"pz_csvg_f1_6", 36, 46, 0, 0},
-    {"pz_csvg_f1_7", 37, 45, 0, 0},
-    {"pz_csvg_f1_8", 35, 46, 0, 0},
-    {"pz_csvg_f1_9", 36, 46, 0, 0},
-    {"pz_csvg_p1", 15, 16, 0, 0},
-    // Confirmation, family 2.
-    {"ps_decide_diff_h01", 36, 71, 26, 7},
-    {"ps_decide_diff_h02", 51, 71, 18, 7},
-    {"ps_decide_diff_h03", 51, 72, 18, 7},
-    {"ps_decide_diff_h04", 63, 70, 12, 8},
-    {"ps_decide_diff_h05", 53, 71, 17, 8},
-    {"ps_decide_diff_h06", 55, 72, 16, 7},
-    {"ps_decide_diff_h07", 57, 71, 15, 8},
-    {"ps_decide_diff_h08", 53, 72, 17, 7},
-    {"ps_decide_diff_h09", 55, 72, 16, 7},
-    {"ps_decide_diff_h10", 82, 72, 3, 7},
-    {"ps_decide_diff_h11", 70, 71, 9, 7},
-    {"ps_decide_diff_h12", 77, 71, 5, 7},
-    {"pz_csvg_f2_0", 40, 46, 0, 0},
-    {"pz_csvg_f2_1", 33, 45, 0, 0},
-    {"pz_csvg_f2_2", 34, 45, 0, 0},
-    {"pz_csvg_f2_3", 34, 46, 0, 0},
-    {"pz_csvg_f2_4", 41, 44, 0, 0},
-    {"pz_csvg_f2_5", 35, 45, 0, 0},
-    {"pz_csvg_f2_6", 36, 46, 0, 0},
-    {"pz_csvg_f2_7", 37, 45, 0, 0},
-    {"pz_csvg_f2_8", 35, 46, 0, 0},
-    {"pz_csvg_f2_9", 36, 46, 0, 0},
-    {"pz_csvg_p2", 15, 16, 0, 0},
-    // Confirmation, family 3.
-    {"ps_decide_diff_a01", 36, 71, 26, 7},
-    {"ps_decide_diff_a02", 51, 71, 18, 7},
-    {"ps_decide_diff_a03", 51, 72, 18, 7},
-    {"ps_decide_diff_a04", 63, 70, 12, 8},
-    {"ps_decide_diff_a05", 53, 71, 17, 8},
-    {"ps_decide_diff_a06", 55, 72, 16, 7},
-    {"ps_decide_diff_a07", 57, 71, 15, 8},
-    {"ps_decide_diff_a08", 53, 72, 17, 7},
-    {"ps_decide_diff_a09", 55, 72, 16, 7},
-    {"ps_decide_diff_a10", 82, 72, 3, 7},
-    {"ps_decide_diff_a11", 70, 71, 9, 7},
-    {"ps_decide_diff_a12", 77, 71, 5, 7},
-    {"pz_csvg_f3_0", 40, 46, 0, 0},
-    {"pz_csvg_f3_1", 33, 45, 0, 0},
-    {"pz_csvg_f3_2", 34, 45, 0, 0},
-    {"pz_csvg_f3_3", 34, 46, 0, 0},
-    {"pz_csvg_f3_4", 41, 44, 0, 0},
-    {"pz_csvg_f3_5", 35, 45, 0, 0},
-    {"pz_csvg_f3_6", 36, 46, 0, 0},
-    {"pz_csvg_f3_7", 37, 45, 0, 0},
-    {"pz_csvg_f3_8", 35, 46, 0, 0},
-    {"pz_csvg_f3_9", 36, 46, 0, 0},
-    {"pz_csvg_p3", 15, 16, 0, 0},
-    // Confirmation, family 4.
-    {"ps_decide_diff_l01", 36, 71, 26, 7},
-    {"ps_decide_diff_l02", 51, 71, 18, 7},
-    {"ps_decide_diff_l03", 51, 72, 18, 7},
-    {"ps_decide_diff_l04", 63, 70, 12, 8},
-    {"ps_decide_diff_l05", 53, 71, 17, 8},
-    {"ps_decide_diff_l06", 55, 72, 16, 7},
-    {"ps_decide_diff_l07", 57, 71, 15, 8},
-    {"ps_decide_diff_l08", 53, 72, 17, 7},
-    {"ps_decide_diff_l09", 55, 72, 16, 7},
-    {"ps_decide_diff_l10", 82, 72, 3, 7},
-    {"ps_decide_diff_l11", 70, 71, 9, 7},
-    {"ps_decide_diff_l12", 77, 71, 5, 7},
-    {"pz_csvg_f4_0", 40, 46, 0, 0},
-    {"pz_csvg_f4_1", 33, 45, 0, 0},
-    {"pz_csvg_f4_2", 34, 45, 0, 0},
-    {"pz_csvg_f4_3", 34, 46, 0, 0},
-    {"pz_csvg_f4_4", 41, 44, 0, 0},
-    {"pz_csvg_f4_5", 35, 45, 0, 0},
-    {"pz_csvg_f4_6", 36, 46, 0, 0},
-    {"pz_csvg_f4_7", 37, 45, 0, 0},
-    {"pz_csvg_f4_8", 35, 46, 0, 0},
-    {"pz_csvg_f4_9", 36, 46, 0, 0},
-    {"pz_csvg_p4", 15, 16, 0, 0},
     // HUD, family 0.
     {"ps_lvlnum_00", 28, 19, 0, 0},
     {"ps_lvlnum_01", 10, 19, 13, 0},
@@ -287,26 +160,6 @@ inline constexpr Image image_table[] = {
     {"ps_result_point_l", 8, 7, 0, 0},
 };
 static_assert(std::size(image_table) == result_begin + 5 * family_images);
-
-struct Optical { float advance, dx, dy; };
-// All five palettes have identical advances, offsets and per-whole baselines;
-// keep these measured numbers once. Bitmap height includes rim/feather overhang.
-inline constexpr Optical confirmation_fraction[10] = {
-    {34, -3, -40},
-    {30, 0, -39},
-    {28, -3, -39},
-    {28, -3, -40},
-    {35, -3, -38},
-    {29, -3, -39},
-    {30, -3, -40},
-    {31, -3, -39},
-    {29, -3, -40},
-    {30, -3, -40},
-};
-inline constexpr Optical confirmation_point{7, -4, -10};
-inline constexpr float confirmation_baseline[12] = {
-    73, 73, 74, 73, 74, 74, 74, 74, 74, 74, 73, 73
-};
 
 // Same retained source directory: played_result_contract.hpp and
 // played_notes_contract.hpp. Final LDJ2026081900 result.ifs, musicinfo_2pp.

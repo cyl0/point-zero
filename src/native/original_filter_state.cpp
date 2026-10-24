@@ -36,20 +36,19 @@ SavedFilterResult collect(MemoryView memory, ImageRange game, std::uintptr_t cat
     int menu_id{}, menu_set{};
     std::uint8_t has_set{};
     if (!read_field(memory, category, 0, next.id) ||
-        !(next.id == 110 || (next.id >= 210 && next.id <= 214)) ||
+        !(next.id == 119 || (next.id >= 219 && next.id <= 223)) ||
         !read_field(memory, game.base, game_bindings(game).original_filter_state.category_manager_rva, next.manager) || !pointer(next.manager) ||
-        !contains(next.manager, 16 + 2 * 230 * 208, category, 208) ||
-        category != next.manager + 16 + 208 * (230ULL * style + next.id) ||
-        !read_field(memory, next.manager, 0x175D0, next.list) || !pointer(next.list) ||
+        !contains(next.manager, 16 + 2 * 226 * 208, category, 208) ||
+        category != next.manager + 16 + 208 * (226ULL * style + next.id) ||
+        !read_field(memory, next.manager, 0x16F50, next.list) || !pointer(next.list) ||
         !read_field(memory, next.list, 0, vt) || vt != game.base + game_bindings(game).original_filter_state.list_vtable_rva ||
         !read_field(memory, category, 160, menu_id) || (!saved_only && menu_id != next.id) ||
         !read_field(memory, category, 164, menu_set) || (!saved_only && menu_set != 1) ||
         !read_field(memory, category, 168, has_set) || (!saved_only && !has_set))
         return SavedFilterResult::invalid;
     if (saved_only) {
-        // LDJ2026081900: 68D8E0 initializes C+A0/A4/A8 to 0/0/0.
-        // 5FCBA5 -> 86F990 admits only IDs 210..214 for menu binding;
-        // A fresh 110 keeps the unbound ID. Match it only for owned set1.
+        // A fresh search category119 can retain an unbound menu ID.
+        // Match saved state only after native has bound the owned set1 menu.
         if (menu_set != 1 || has_set == 0)
             return SavedFilterResult::none;
         if (menu_id != next.id) return SavedFilterResult::invalid;

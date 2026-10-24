@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace point_zero::native::detail {
-// Finite SafetyHook0.7 Windows x64 captures: two confirmation sites, HUD,
+// Finite SafetyHook0.7 Windows x64 captures: HUD,
 // result, notes, Step Up, category-summary binding, category Back, boot text
 // and the guide's two pre-call MOVs. before is the already-admitted native slice starting at
 // target (possibly larger than the stolen 5/6/8 bytes); all of it is checked.
@@ -24,7 +24,7 @@ namespace point_zero::native::detail {
 class PlayedMidPatch final {
 public:
     PlayedMidPatch(MemoryView, std::uintptr_t target, std::span<const std::byte> before,
-                   safetyhook::MidHookFn, const GameBindings& = august_bindings);
+                   safetyhook::MidHookFn, const GameBindings& = october_bindings);
     PlayedMidPatch(const PlayedMidPatch&) = delete;
     PlayedMidPatch& operator=(const PlayedMidPatch&) = delete;
     bool before_intact() const noexcept;

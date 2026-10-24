@@ -134,7 +134,7 @@ struct CategoryRequestHooks::State {
             request.category = integer(r.rbp);
         } else if (index == 1) {
             if (!read_value(memory, entry + 8, request.selection) ||
-                !buffer(request.selection, 0x330) || r.r13 != request.selection + 0x328 ||
+                !buffer(request.selection, 0x320) || r.r13 != request.selection + 0x318 ||
                 !read_value(memory, entry + 0x10, out.event)) return false;
             std::array<int, 3> record{};
             out.vector = r.rbp - 0x69;
@@ -148,12 +148,12 @@ struct CategoryRequestHooks::State {
                 !read_value(memory, r.rsi, request.category)) return false;
             request.song = record[2]; request.style = record[1]; request.p1 = integer(r.r12);
         } else {
-            request.selection = r.r14; out.event = r.r15; request.category = 197;
+            request.selection = r.r14; out.event = r.r15; request.category = 206;
             std::array<int, 5> record{};
             if (!read_value(memory, r.rsi, record)) return false;
             request.song = record[4]; request.style = record[3]; request.p1 = request.p2 = record[2];
         }
-        if (!buffer(request.selection, 0x330) || !buffer(out.event, sizeof(int), 4) ||
+        if (!buffer(request.selection, 0x320) || !buffer(out.event, sizeof(int), 4) ||
             request.category < 0 || !read_value(memory, out.event, out.event_value)) return false;
         std::byte selection{};
         if (!read_value(memory, request.selection, selection)) return false;

@@ -14,12 +14,12 @@ struct PlayedChartCalls {
     int (__fastcall* style)(){};
 };
 
-// Captured at one of the admitted LDJ2026081900 instruction boundaries below.
-// Ordinary/Step Up confirmation read the committed tuple from owner; other fields
-// are unused. HUD/result use the native callback's already-resolved played tuple,
+// Captured at one of the admitted October13 instruction boundaries below.
+// Step Up reads the committed tuple from owner; other fields are unused.
+// HUD/result use the native callback's already-resolved played tuple,
 // including course fallback, and recheck the published music/difficulty fields.
 // This is not a request to resolve song selection.
-enum class PlayedCaptureKind { unknown, confirmation_first, confirmation_second, hud, result, stepup };
+enum class PlayedCaptureKind { unknown, hud = 3, result, stepup };
 struct PlayedCapture {
     std::uintptr_t site{}, owner{}, music{};
     int player{}, style{}, difficulty{}, native_level{};
@@ -62,9 +62,9 @@ struct PlayedTarget {
     std::size_t count{};
 };
 
-// Selected boundaries: confirmation 601715/601749, HUD 9045FD, result 91C56D,
-// Step Up 601F4E. Step Up additionally requires its exact confirmation scene,
-// committed published tuple and live /1/stepup.ifs slot/package generation.
+// Selected boundaries: HUD 8EF69D, result 9075ED, Step Up 5F5710.
+// Step Up requires its committed published tuple and live source slot/package
+// generation. Ordinary confirmation is owned by ConfirmationRenderer.
 // The caller supplies a complete admitted call table and code/register contracts before
 // capture. False is ordinary native fallback and clears out; it does not change
 // feature state. No allocation, writes, module scan or per-field page queries.

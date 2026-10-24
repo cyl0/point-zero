@@ -64,13 +64,13 @@ void OriginalFilter::begin(Frame& frame, bool effective) noexcept {
         if (game.base < 0x10000 || !contains(game.base, game.size, game.base, game.size) ||
             game.size < game_bindings(context_.modules.game.range).original_filter.filter_candidate_state_rva + 12 || request.caller != game.base + game_bindings(context_.modules.game.range).original_filter.filter_apply_caller_rva ||
             request.set != 1 || request.style < 0 || request.style > 1 ||
-            !(request.category == 110 || (request.category >= 210 && request.category <= 214)) ||
+            !(request.category == 119 || (request.category >= 219 && request.category <= 223)) ||
             request.candidate != game.base + game_bindings(context_.modules.game.range).original_filter.filter_candidate_state_rva) return;
         const auto mode = mode_();
         if (mode != 0 && mode != 6) return;
         std::uintptr_t manager{};
         if (!read_field(context_.memory, game.base, game_bindings(context_.modules.game.range).original_filter.category_manager_rva, manager) || manager < 0x10000) return;
-        const auto offset = 16 + 208 * (230ULL * request.style + request.category);
+        const auto offset = 16 + 208 * (226ULL * request.style + request.category);
         if (offset > UINTPTR_MAX - manager ||
             !read_original_filter_state(context_.memory, game, manager + offset, request.style, frame.owner) ||
             request.owner != frame.owner.active || !frame.owner.enabled) return;
@@ -131,11 +131,11 @@ bool OriginalFilter::rebuild_owner(Rebuild& out) const {
     int menu_id{}, menu_set{};
     std::uint8_t has_set{};
     if (!read_field(memory, out.category, 0, out.id) ||
-        !(out.id == 110 || (out.id >= 210 && out.id <= 214)) ||
+        !(out.id == 119 || (out.id >= 219 && out.id <= 223)) ||
         !read_field(memory, game.base, game_bindings(context_.modules.game.range).original_filter.category_manager_rva, out.manager) || !pointer(out.manager)) return false;
-    const auto offset = 16 + 208 * (230ULL * out.style + out.id);
+    const auto offset = 16 + 208 * (226ULL * out.style + out.id);
     if (offset > UINTPTR_MAX - out.manager || out.category != out.manager + offset ||
-        !read_field(memory, out.manager, 0x175D0, out.list) || !pointer(out.list) ||
+        !read_field(memory, out.manager, 0x16F50, out.list) || !pointer(out.list) ||
         !read_field(memory, out.list, 0, vtable) || vtable != game.base + game_bindings(context_.modules.game.range).original_filter.list_vtable_rva ||
         !read_field(memory, out.category, 160, menu_id) || menu_id != out.id ||
         !read_field(memory, out.category, 164, menu_set) || menu_set != 1 ||

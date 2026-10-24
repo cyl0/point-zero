@@ -21,7 +21,7 @@ struct PlayedNativeCalls {
     std::uintptr_t (__fastcall* definition)(std::uintptr_t, std::uint32_t){};
     void (__fastcall* select_stream)(std::uint32_t){};
     void (__fastcall* restore_stream)(const void*){};
-    void (__fastcall* set_name)(std::uintptr_t, const char*){};
+    int (__fastcall* set_name)(std::uintptr_t, const char* const*){};
     void (__fastcall* clear_name)(std::uintptr_t){};
     void (__fastcall* position)(std::uintptr_t, const float*){};
     int (__fastcall* timeline_position)(std::uintptr_t, const int*){};

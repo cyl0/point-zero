@@ -14,11 +14,6 @@
 namespace point_zero::native {
 namespace {
 static_assert(sizeof(std::uintptr_t) == 8);
-// Reviewed LDJ2026081900 final branch of native_resource_bindings. These are
-// complete bitmap-call return RVAs, not function entries or low address bits.
-
-
-
 struct Owner {
     std::uintptr_t music{};
     std::array<int, 2> difficulties{};

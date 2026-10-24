@@ -21,7 +21,7 @@ static_assert(std::size(detail::stepup_images) == 5 * detail::family_images);
 std::span<const Image> images() noexcept { return all_images; }
 
 Plan make(Surface surface, int difficulty, int tenths) noexcept {
-    if ((surface != Surface::confirmation && surface != Surface::hud &&
+    if ((surface != Surface::hud &&
          surface != Surface::result && surface != Surface::stepup) || difficulty < 0 || difficulty > 4 ||
         tenths < 10 || tenths > 129) return {};
 
@@ -36,13 +36,20 @@ Plan make(Surface surface, int difficulty, int tenths) noexcept {
         // narrow 1 bearing is in the texture; all digits take this same path.
         const float width = w.advance + 44;
         const float left = std::round((difficulty == 2 ? 74.5f : 75.f) - width / 2);
-        return {{{{wi, 1, left - w.left, 0},
-                  {pi, 1, left + w.advance + 3 + static_cast<float>(p.x), w.baseline + static_cast<float>(p.y)},
-                  {fi, 1, left + w.advance + 14 + static_cast<float>(f.x), w.baseline + static_cast<float>(f.y)}}}, 3, width, false};
+        Plan out{{{{wi, 1, left - w.left, 0},
+                   {pi, 1, left + w.advance + 3 + static_cast<float>(p.x), w.baseline + static_cast<float>(p.y)},
+                   {fi, 1, left + w.advance + 14 + static_cast<float>(f.x), w.baseline + static_cast<float>(f.y)}}}, 3, width, false};
+        if (difficulty == 4) {
+            const auto& placement = detail::stepup_leggendaria[tenths];
+            for (std::size_t i = 0; i < out.parts.size(); ++i) {
+                out.parts[i].x = placement.x[i];
+                out.parts[i].y = placement.y[i];
+            }
+        }
+        return out;
     }
     const int base = surface == Surface::hud ? detail::hud_begin :
-        (surface == Surface::result ? detail::result_begin : 0) +
-        difficulty * detail::family_images;
+        detail::result_begin + difficulty * detail::family_images;
     const int wi = base + (surface == Surface::hud ? whole : whole - 1);
     const int fi = base + (surface == Surface::hud ? fraction : 12 + fraction);
     const int pi = base + (surface == Surface::hud ? 13 : 22);
@@ -54,25 +61,7 @@ Plan make(Surface surface, int difficulty, int tenths) noexcept {
     // Ordinary make() in point_zero_played_layout.hpp, retained at
     // 09_outputs/research_v1_playlister51_20261001/candidate/source/src/.
     Plan out;
-    if (surface == Surface::confirmation) {
-        const auto& fm = detail::confirmation_fraction[fraction];
-        const auto& dm = detail::confirmation_point;
-        const float baseline = detail::confirmation_baseline[whole - 1];
-        constexpr float gap = 2;
-        // Retained confirmation art differs from the cup: keep its native
-        // dimensions/face baseline, and kern only the measured seven pairs.
-        // 7's lower diagonal leaves 16px more point clearance than 6; .7 can
-        // give back 2px while preserving the feather channel. Evidence:
-        // implementation_v1_playtest_feedback_20261003/spacing-measurements.json.
-        const float whole_kern = whole == 7 ? -16.f : 0.f;
-        const float fraction_kern = fraction == 7 ? -2.f : 0.f;
-        out.width = ww + dm.advance + fm.advance + 2 * gap + whole_kern + fraction_kern;
-        const float left = std::round((86 - out.width) / 2);
-        out.parts = {{{wi, 1, left, static_cast<float>(w.y)},
-                      {pi, 1, left + ww + gap + whole_kern + dm.dx, baseline + dm.dy},
-                      {fi, 1, left + ww + gap + dm.advance + gap + whole_kern + fraction_kern + fm.dx,
-                       baseline + fm.dy}}};
-    } else if (surface == Surface::result) {
+    if (surface == Surface::result) {
         const float bearing = detail::result_left_bearing[difficulty][whole >= 10];
         const float dw = static_cast<float>(d.width);
         out.width = ww - bearing + dw + static_cast<float>(f.width);
@@ -102,11 +91,11 @@ ResultPlate select_result_plate(int players, int sole, int player, const char* l
     if (!leaf || player < 0 || player > 1) return {};
     const std::string_view path = leaf;
     if (players == 1 && sole == player && path == "diff_number")
-        return {2, 33, 5, "iidxlab_result_plate", false};
+        return {2, 31, 5, "iidxlab_result_plate", false};
     if (players == 2 && player == 0 && path == "diff_number_1p")
-        return {3, 38, 6, "iidxlab_result_plate_1p", false};
+        return {3, 36, 6, "iidxlab_result_plate_1p", false};
     if (players == 2 && player == 1 && path == "diff_number_2p")
-        return {4, 38, 5, "iidxlab_result_plate_2p", true};
+        return {4, 36, 5, "iidxlab_result_plate_2p", true};
     return {};
 }
 

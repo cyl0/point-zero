@@ -7,7 +7,7 @@ namespace point_zero::native {
 namespace {
 using StreamContext = std::array<std::uint64_t, 2>;
 bool stream_context(MemoryView memory, ImageRange afp, StreamContext& out) noexcept {
-    constexpr std::array<std::size_t, 2> fields{0xE1144, 0xE1128};
+    constexpr std::array<std::size_t, 2> fields{0xF23E4, 0xF23C8};
     for (std::size_t i = 0; i < fields.size(); ++i) {
         if (!memory.read || fields[i] > UINTPTR_MAX - afp.base ||
             !contains(afp.base, afp.size, afp.base + fields[i], sizeof(out[i])) ||
@@ -27,9 +27,8 @@ bool played_name(MemoryView memory, ImageRange afp, const PlayedNativeCalls& cal
         __try {
             calls.select_stream(stream);
             {
-                if (name) calls.set_name(work, name);
-                else calls.clear_name(work);
-                done = true;
+                if (name) done = calls.set_name(work, &name) == 0;
+                else { calls.clear_name(work); done = true; }
             }
         } __finally { calls.restore_stream(saved.data()); }
         return done;

@@ -43,8 +43,8 @@ bool starts_with(std::span<const std::byte> bytes, std::span<const std::byte> pr
     return bytes.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), bytes.begin());
 }
 std::size_t stolen_size(std::span<const std::byte> bytes, const GameBindings& bindings) {
-    if (starts_with(bytes, bindings.captures.confirmation)) return 8;
     if (starts_with(bytes, bindings.captures.stepup)) return 8;
+    if (starts_with(bytes, bindings.captures.dan)) return bindings.captures.dan.size();
     if (starts_with(bytes, hud)) return 6;
     if (starts_with(bytes, summary)) return 5;
     if (starts_with(bytes, category_back)) return 5;

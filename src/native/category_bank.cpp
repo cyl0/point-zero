@@ -76,7 +76,7 @@ struct CategoryBank::Backing {
     }
     bool read_preferences() noexcept {
         for (unsigned style = 0; style < 2; ++style) for (int parent = 0; parent < 12; ++parent) {
-            const auto at = manager + 16 + sizeof(Category) * (230ULL * style + 17 - parent);
+            const auto at = manager + 16 + sizeof(Category) * (226ULL * style + 24 - parent);
             std::array<int, 2> value{};
             if (!read(memory, at + offsetof(Category, preferences), value) || value[0] < 0 || value[0] > 4 || value[1] < 0 || value[1] > 4)
                 return false;
@@ -127,7 +127,7 @@ CategoryBank::~CategoryBank() noexcept {
 bool CategoryBank::build_native(std::uintptr_t manager, std::uintptr_t list, LevelPopulation& population, Lookup lookup) {
     auto& b = *backing_;
     b.state = CategoryBankState::rejected;
-    if (!pointer(manager, 0x2A428) || !pointer(list) || !lookup) return false;
+    if (!pointer(manager, 0x29868) || !pointer(list) || !lookup) return false;
     int first = first_id;
     for (int n = 0; n < per_style;) {
         if (first > INT_MAX - per_style - 230) return false;

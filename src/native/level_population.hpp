@@ -41,8 +41,8 @@ public:
 
 private:
     struct Source {
-        int id{}, count{}, inserted{};
-        category_layout::Vector charts;
+        int id{}, count{}, inserted{}, bar_count{};
+        category_layout::Vector charts, bars;
         bool operator==(const Source&) const = default;
     };
     MemoryView memory_;

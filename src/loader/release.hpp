@@ -32,7 +32,7 @@ struct Release {
     std::uint64_t sequence;
     std::vector<Artifact> files;
     std::uint32_t core_abi{5};
-    std::uint32_t major{33};
+    std::uint32_t major{};
     const Artifact& core() const;
     // Non-null after schema-4 parsing; hand-built Release values may lack it.
     const Artifact* updater() const noexcept;

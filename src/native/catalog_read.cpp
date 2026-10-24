@@ -35,7 +35,7 @@ CapturedCatalog read_catalog(const CatalogAccess& access) {
     require(address >= 0x10000 && snapshot_limit <= UINTPTR_MAX - address, "invalid catalogue storage");
     std::array<std::byte, header_size> header{};
     require(access.memory.read(access.memory.context, address, header), "catalogue header unavailable");
-    require(value<std::uint32_t>(header, 0) == 0x58444949 && value<std::uint32_t>(header, 4) == 33,
+    require(value<std::uint32_t>(header, 0) == 0x58444949 && value<std::uint32_t>(header, 4) == 34,
             "catalogue magic or major mismatch");
     const auto records = value<std::uint32_t>(header, 8);
     const auto id_limit = value<std::uint32_t>(header, 12);

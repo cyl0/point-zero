@@ -4,20 +4,16 @@
 #include <cmath>
 
 namespace point_zero::native::list_art {
-bool placement(int difficulty, bool compact, int tenths, Placement& out) noexcept {
-    return difficulty >= 0 && difficulty < 5 && placement(compact, tenths, out);
-}
-
 bool placement(bool compact, int tenths, Placement& out) noexcept {
     if (tenths < 10 || tenths > 129) return false;
 
     const int whole_glyph = tenths / 10;
-    const auto whole = detail::whole_sizes[int(compact)][whole_glyph - 1];
+    const auto whole_width = detail::whole_widths[int(compact)][whole_glyph - 1];
     // Approved B84 study(..., mode=2) from list_ux_layout.hpp in
     // 09_outputs/research_v1_playlister51_20261001/candidate/source/src/.
     // Center the native whole in the original 60px window at unit scale.
-    const float whole_x = (60.0f - static_cast<float>(whole.width)) / 2.0f;
-    const float point_face_x = whole_x + static_cast<float>(whole.width) + 2.0f;
+    const float whole_x = (60.0f - static_cast<float>(whole_width)) / 2.0f;
+    const float point_face_x = whole_x + static_cast<float>(whole_width) + 2.0f;
 
     // API coordinates are offsets from the incoming native draw origin:
     // x = round(sourcepart.x) - 7, y = round(sourcepart.y).
@@ -39,19 +35,4 @@ bool placement(bool compact, int tenths, Placement& out) noexcept {
     return true;
 }
 
-bool size(int difficulty, bool compact, int glyph, Size& out) noexcept {
-    if (difficulty < 0 || difficulty >= 5) return false;
-
-    Size result;
-    if (glyph >= 1 && glyph <= 12)
-        result = detail::whole_sizes[int(compact)][glyph - 1];
-    else if (glyph >= 14 && glyph <= 23)
-        result = detail::fraction_sizes[int(compact)];
-    else if (glyph == 24)
-        result = detail::point_size;
-    else
-        return false;
-    out = result;
-    return true;
-}
 } // namespace point_zero::native::list_art

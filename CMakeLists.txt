@@ -61,13 +61,16 @@ point_zero_warnings(point_zero_native_assets)
 add_library(point_zero_native_list_entry OBJECT src/native/list_entry.asm)
 add_library(point_zero_native_sort_entry OBJECT src/native/sort_entry.asm)
 add_library(point_zero_native_filter_entry OBJECT src/native/filter_entry.asm)
+add_library(point_zero_native_assistant_entry OBJECT src/native/assistant_header_entry.asm)
 add_library(point_zero_native_hook STATIC src/native/catalog_hook.cpp
     src/native/inline_patch.cpp
     src/native/call_patch.cpp src/native/surface_hooks.cpp src/native/list_hook.cpp
     src/native/title_limit_patch.cpp src/native/list_title_hook.cpp
     src/native/played_mid_patch.cpp src/native/played_hooks.cpp src/native/sort_hook.cpp src/native/filter_hooks.cpp
+    src/native/assistant_header.cpp
     $<TARGET_OBJECTS:point_zero_native_list_entry>
-    $<TARGET_OBJECTS:point_zero_native_sort_entry> $<TARGET_OBJECTS:point_zero_native_filter_entry>)
+    $<TARGET_OBJECTS:point_zero_native_sort_entry> $<TARGET_OBJECTS:point_zero_native_filter_entry>
+    $<TARGET_OBJECTS:point_zero_native_assistant_entry>)
 target_link_libraries(point_zero_native_hook PUBLIC point_zero_native_memory PRIVATE safetyhook::safetyhook point_zero_ratings)
 target_include_directories(point_zero_native_hook PUBLIC include)
 target_compile_features(point_zero_native_hook PRIVATE cxx_std_23)
@@ -95,7 +98,7 @@ target_link_libraries(point_zero_native_selection PUBLIC point_zero_native_catal
 point_zero_warnings(point_zero_native_selection)
 
 add_library(point_zero_native_cup STATIC src/native/cup.cpp src/native/cup_layout.cpp
-    src/native/cup_contract.cpp src/native/surface_contract.cpp)
+    src/native/cup_contract.cpp src/native/surface_contract.cpp src/native/confirmation.cpp)
 target_include_directories(point_zero_native_cup PUBLIC include src)
 target_link_libraries(point_zero_native_cup PUBLIC point_zero_native_selection point_zero_native_state)
 target_compile_definitions(point_zero_native_cup PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -110,7 +113,7 @@ target_link_libraries(point_zero_native_list PUBLIC point_zero_native_catalog
 target_compile_definitions(point_zero_native_list PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 point_zero_warnings(point_zero_native_list)
 
-add_library(point_zero_native_played STATIC src/native/played_chart.cpp src/native/played_layout.cpp src/native/stepup_contract.cpp
+add_library(point_zero_native_played STATIC src/native/played_chart.cpp src/native/played_layout.cpp src/native/stepup_contract.cpp src/native/dan_contract.cpp
     src/native/played_contract.cpp src/native/played_calls_contract.cpp src/native/played_calls.cpp src/native/played.cpp
     src/native/result_plate.cpp src/native/result_notes.cpp)
 target_include_directories(point_zero_native_played PUBLIC include src)
@@ -119,7 +122,7 @@ target_link_libraries(point_zero_native_played PUBLIC point_zero_native_catalog 
 target_compile_definitions(point_zero_native_played PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 point_zero_warnings(point_zero_native_played)
 
-add_library(point_zero_native_surfaces STATIC src/native/surfaces.cpp)
+add_library(point_zero_native_surfaces STATIC src/native/surfaces.cpp src/native/assistant.cpp src/native/dan.cpp)
 target_link_libraries(point_zero_native_surfaces PUBLIC point_zero_native_cup
     point_zero_native_list point_zero_native_played point_zero_native_hook)
 target_compile_definitions(point_zero_native_surfaces PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)

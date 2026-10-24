@@ -6,6 +6,7 @@
 #include "surfaces.hpp"
 
 #include <windows.h>
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <string>
@@ -13,8 +14,12 @@
 namespace point_zero::native {
 namespace {
 void require(bool okay, const char* why) { if (!okay) throw std::runtime_error(why); }
-constexpr std::array families{NativeSurfaces::families[0], NativeSurfaces::families[1],
-                              NativeSurfaces::families[2], FolderArtwork::family};
+constexpr auto families = [] {
+    std::array<std::string_view, NativeSurfaces::families.size() + 1> result{};
+    std::copy(NativeSurfaces::families.begin(), NativeSurfaces::families.end(), result.begin());
+    result.back() = FolderArtwork::family;
+    return result;
+}();
 class FinalAdapters final : public NativeAdapters {
 public:
     explicit FinalAdapters(const AdapterContext& context) noexcept
@@ -63,7 +68,9 @@ public:
                 require(slot != asset.slot, "native asset families share a resource slot");
             slots[index] = asset.slot;
         }
-        surfaces_.activate(NativeSurfaces::AssetSlots{slots[0], slots[1], slots[2]});
+        NativeSurfaces::AssetSlots surface_slots{};
+        std::copy_n(slots.begin(), surface_slots.size(), surface_slots.begin());
+        surfaces_.activate(surface_slots);
         preparing();
         if (browsing_prepared_) {
             try {

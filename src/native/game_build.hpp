@@ -20,6 +20,4 @@ const GameBuild& select_game_build(MemoryView, const ImageInfo&);
 
 // Intrinsic identity of the selected loaded PE image.
 GameBuildIdentity inspect_game_build(MemoryView, const ImageInfo&);
-std::string_view supported_game_datecode(const GameBuildIdentity&) noexcept;
-std::string_view check_game_build(MemoryView, const ImageInfo&);
 } // namespace point_zero::native

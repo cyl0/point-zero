@@ -5,7 +5,7 @@
 #include <span>
 
 namespace point_zero::native::played_art {
-enum class Surface { confirmation = 1, hud = 2, result = 3, stepup = 4 };
+enum class Surface { hud = 2, result = 3, stepup = 4 };
 
 struct Image {
     const char* name;
@@ -24,14 +24,14 @@ struct Plan {
 
 // Immutable, process-lifetime table of exactly the required private-package
 // images. The renderer must preflight their names/extents before publication.
-inline constexpr std::size_t image_count = 359;
+inline constexpr std::size_t image_count = 244;
 std::span<const Image> images() noexcept;
 
 // Difficulty 0..4 = Beginner/Normal/Hyper/Another/
 // Leggendaria; HUD shares one family. Tenths 10..129 include explicit .0.
 // Invalid surface/difficulty/value returns an empty Plan (all image indices -1).
 // Offsets are relative to the native numeral host; do not add Image::x/y again.
-// Confirmation width is optical advance, not feather bounds. For wide results,
+// For wide results,
 // the caller must extend the native plate/adjacent layout by width-200 pixels,
 // preserving its right edge and animation. This function never mutates owners.
 // Allocation-free; identity, availability, BATTLE policy and native admission

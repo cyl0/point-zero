@@ -25,7 +25,7 @@ enum class CategoryBadgeResult { rejected, complete, uncertain };
 // Preserve native producer order: badge, style/category, visible chart. Call
 // every native predicate, including repeats and rows after a positive result;
 // Shop reads the native clock. No per-song cache or per-frame refresh. The four
-// bytes are Weekly/Recommend/Shop/KAC, irrespective of legacy getter names.
+// bytes are Weekly/Recommend/Shop/KAC.
 //
 // Capture visible membership before native evaluation. Publish only bytes0..3;
 // native chart/music bindings are checked per provider, with failed providers

@@ -15,6 +15,7 @@ struct CategoryRootSelection {
     std::uint8_t open{};
     bool operator==(const CategoryRootSelection&) const = default;
 };
+bool selected_group_id(MemoryView, std::uintptr_t list, int& id) noexcept;
 // Read the bounded LEVEL linkage. expected additionally rejects a different
 // group or an alias under another ID; discovery leaves that policy to its caller.
 bool find_level_group(MemoryView, ImageRange, std::uintptr_t list, std::uintptr_t& group,

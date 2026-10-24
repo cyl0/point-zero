@@ -33,7 +33,7 @@ bool valid(const CategorySummaryBinding& b) noexcept {
 }
 bool valid(const CategorySummaryRequest& r) noexcept {
     return r.style >= 0 && r.style <= 1 &&
-        r.id >= 0 && buffer(r.manager, 0x2A428);
+        r.id >= 0 && buffer(r.manager, 0x29868);
 }
 template<std::size_t N> bool bytes_at(const CategorySummarySite& s, std::uintptr_t at,
                                      const std::array<std::byte, N>& expected) noexcept {
@@ -112,7 +112,7 @@ struct CategorySummary::State {
         if (!current || !current->state) return;
         auto& self = *current->state;
         const auto& call = current->invocation;
-        const auto index = static_cast<std::uintptr_t>(230 * call.style + call.id);
+        const auto index = static_cast<std::uintptr_t>(226 * call.style + call.id);
         const auto category = call.manager + 16 + 208 * index;
         // Only this admitted function's real invocation may bind. On failure
         // resume its native cookie/epilogue before any invalid indexed access.
@@ -120,8 +120,8 @@ struct CategorySummary::State {
             registers.rsp == call.entry_rsp - 0xA8 && !(registers.rsp & 15) &&
             registers.rcx == call.manager && registers.r12 == static_cast<std::uintptr_t>(call.style) &&
             registers.r8 == index && registers.rbx == category &&
-            registers.r14 == call.manager + 0x175E8 + 168 * index &&
-            registers.rdi == call.manager + 0x17618 + 168 * index &&
+            registers.r14 == call.manager + 0x16F68 + 168 * index &&
+            registers.rdi == call.manager + 0x16F94 + 168 * index &&
             replace_spill(registers.rsp + 0x48, category, current->binding.category);
         if (!matched) {
             current->rejected = true;
@@ -130,7 +130,7 @@ struct CategorySummary::State {
         }
         registers.rbx = current->binding.category;
         registers.r14 = current->binding.summary + 8;
-        registers.rdi = current->binding.summary + 56;
+        registers.rdi = current->binding.summary + 52;
     }
     static std::intptr_t __fastcall dispatch(std::uintptr_t manager, int style, int id) {
         auto& self = *live.load(std::memory_order_acquire);
@@ -144,7 +144,7 @@ struct CategorySummary::State {
             entered = valid(request) && self.enter();
             if (entered) prepared = self.callbacks.prepare(self.context, request, current.binding);
             if (!prepared) {
-                observed = entered && id < 230 && self.callbacks.native_finish;
+                observed = entered && id < 226 && self.callbacks.native_finish;
                 const auto result = self.original(manager, style, id);
                 completed = true;
                 return result;

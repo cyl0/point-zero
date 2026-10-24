@@ -19,6 +19,12 @@ SurfaceHookSites admit_surface_sites(MemoryView memory, const ImageInfo& game, c
         !contains(game.range.base, game.range.size, game.range.base + bindings.bitmap_import, sizeof(bitmap)) ||
         !read_value(memory, game.range.base + bindings.bitmap_import, bitmap))
         throw std::runtime_error("surface interface unavailable");
-    return {entry(memory, game.range.base + bindings.cup_rva), entry(memory, bitmap)};
+    for (const auto rva : {bindings.cup_setter_rva, bindings.confirmation_setter_rva, bindings.confirmation_rva})
+        if (!contains(game.range.base, game.range.size, game.range.base + rva, 32))
+            throw std::runtime_error("surface entry outside selected game");
+    return {entry(memory, game.range.base + bindings.cup_rva), entry(memory, bitmap),
+            entry(memory, game.range.base + bindings.cup_setter_rva),
+            entry(memory, game.range.base + bindings.confirmation_setter_rva),
+            entry(memory, game.range.base + bindings.confirmation_rva)};
 }
 } // namespace point_zero::native
