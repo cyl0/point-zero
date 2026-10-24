@@ -31,7 +31,15 @@ struct CodeView {
     std::uint32_t age{};
 };
 static_assert(sizeof(CodeView) == 24);
-// Raw GUID bytes in the retained 2026101300 bm2dx CodeView RSDS record.
+// Raw GUID bytes in each retained bm2dx CodeView RSDS record.
+constexpr GameBuildIdentity tested_2026091600{
+    0x6AA23D57, 0x0C5FF000, 0x00B02B3C,
+    {0xA3, 0x59, 0x6D, 0x3E, 0xE7, 0xBC, 0xBB, 0x47,
+     0x87, 0x9E, 0x73, 0x54, 0x59, 0x7E, 0xD5, 0xCC}, 1};
+constexpr GameBuildIdentity tested_2026093000{
+    0x6AB4E1DA, 0x0C5FE000, 0x00B0211C,
+    {0x82, 0x5B, 0x37, 0xE7, 0x40, 0x0B, 0x7A, 0x4E,
+     0xAB, 0xAC, 0xCB, 0x20, 0xBD, 0xCA, 0x27, 0x5F}, 1};
 constexpr GameBuildIdentity tested_2026101300{
     0x6AC5F8CE, 0x0C5FE000, 0x00B0294C,
     {0x27, 0x07, 0x78, 0x2B, 0x5F, 0x45, 0x9B, 0x4E,
@@ -84,6 +92,8 @@ GameBuildIdentity inspect_game_build(MemoryView memory, const ImageInfo& image) 
 
 namespace {
 constexpr GameBuild builds[]{
+    {tested_2026091600, "2026091600", &september16_bindings},
+    {tested_2026093000, "2026093000", &september30_bindings},
     {tested_2026101300, "2026101300", &october_bindings},
 };
 }

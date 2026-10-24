@@ -3,26 +3,20 @@
 
 #include <windows.h>
 #include <algorithm>
-#include <array>
 #include <stdexcept>
 #include <utility>
 
 namespace point_zero::native {
 namespace {
-constexpr std::array capture{
-    std::byte{0x48}, std::byte{0xC7}, std::byte{0x44}, std::byte{0x24}, std::byte{0x20},
-    std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{0xE8},
-    std::byte{0x89}, std::byte{0x68}, std::byte{0xCB}, std::byte{0xFF}, std::byte{0x4C},
-    std::byte{0x8D}, std::byte{0x5C}, std::byte{0x24}, std::byte{0x50}};
-
 void require(bool okay, const char* message) {
     if (!okay) throw std::runtime_error(message);
 }
 auto code(MemoryView memory, ImageRange image) {
+    const auto& capture = game_bindings(image).boot_text.capture;
     require(game_bindings(image).boot_text.capture_rva <= image.size && capture.size() <= image.size - game_bindings(image).boot_text.capture_rva,
             "boot text range outside selected game");
     const auto at = image.base + game_bindings(image).boot_text.capture_rva;
-    std::array<std::byte, capture.size()> bytes{};
+    auto bytes = capture;
     require(readable_range(memory, at, bytes.size(), RangeUse::image_code, image) &&
             read_bytes(memory, at, bytes) &&
             std::equal(bytes.begin(), bytes.end(), capture.begin()),

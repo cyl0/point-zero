@@ -56,7 +56,7 @@ struct CategoryLifecycleHooks::State {
     const Callbacks callbacks;
     const std::uintptr_t initialize_caller;
     const std::uintptr_t queue_caller, initialize_vtable, restore_vtable, restore_invoke, manager_slot;
-    const std::uintptr_t restore_caller;
+    const std::uintptr_t restore_caller, construction_caller;
     const std::uintptr_t initialize_entry;
     const std::uintptr_t scene_entry_caller, scene_tick_caller, scene_vtable, idle_callback;
     const std::uintptr_t scene_refresh_caller;
@@ -71,7 +71,8 @@ struct CategoryLifecycleHooks::State {
         : memory(m), context(opaque), callbacks(cb), initialize_caller(sites.initialize_caller),
           queue_caller(sites.queue_caller), initialize_vtable(sites.initialize_vtable),
           restore_vtable(sites.restore_vtable), restore_invoke(sites.restore_invoke), manager_slot(sites.manager_slot),
-          restore_caller(sites.restore_caller), initialize_entry(sites.entries[0].address),
+          restore_caller(sites.restore_caller), construction_caller(sites.construction_caller),
+          initialize_entry(sites.entries[0].address),
           scene_entry_caller(sites.scene_entry_caller), scene_tick_caller(sites.scene_tick_caller),
           scene_vtable(sites.scene_vtable), idle_callback(sites.idle_callback),
           scene_refresh_caller(sites.scene_refresh_caller), preview_caller(sites.preview_caller),
@@ -189,11 +190,10 @@ struct CategoryLifecycleHooks::State {
     }
     bool construction(std::uintptr_t owner, std::uintptr_t caller) const noexcept {
         // The actual34 LEVEL constructor populates empty vectors before list replacement.
-        const auto base = manager_slot - 0xB3E91D8;
         int id{};
         std::array<std::uintptr_t, 6> vectors{};
         std::array<int, 2> cursors{};
-        return caller == base + 0x62BD68 && native::read(memory, owner + 8, id) && id == 1 &&
+        return caller == construction_caller && native::read(memory, owner + 8, id) && id == 1 &&
             native::read(memory, owner + 0x78, vectors) && vectors == decltype(vectors){} &&
             native::read(memory, owner + 0xA8, cursors) && cursors == decltype(cursors){};
     }
@@ -351,6 +351,7 @@ CategoryLifecycleHooks::CategoryLifecycleHooks(MemoryView memory, const Category
                 "category lifecycle hook dependencies missing");
         require(sites.initialize_caller >= 0x10005, "category lifecycle initializer caller missing");
         require(sites.preview_caller >= 0x10000, "category lifecycle preview caller missing");
+        require(sites.construction_caller >= 0x10000, "category lifecycle construction caller missing");
         require(sites.queue_caller >= 0x10000 && sites.initialize_vtable >= 0x10000 &&
                 sites.restore_vtable >= 0x10000 && sites.restore_invoke >= 0x10000 && sites.manager_slot >= 0x10000 &&
                 sites.restore_caller >= 0x10000,

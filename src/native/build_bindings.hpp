@@ -13,6 +13,11 @@ struct AssetContract {
 struct BootText {
     std::uint32_t renderer_rva = 0x5DD170;
     std::uint32_t capture_rva = 0x926979;
+    std::array<std::byte, 19> capture{
+        std::byte{0x48}, std::byte{0xC7}, std::byte{0x44}, std::byte{0x24}, std::byte{0x20},
+        std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{0xE8},
+        std::byte{0x89}, std::byte{0x68}, std::byte{0xCB}, std::byte{0xFF}, std::byte{0x4C},
+        std::byte{0x8D}, std::byte{0x5C}, std::byte{0x24}, std::byte{0x50}};
 };
 struct Browsing {
     std::uint32_t lookup_rva = 0x85B8D0;
@@ -85,6 +90,7 @@ std::uint32_t initialize_vtable_rva = 0xD51998;
 std::uint32_t restore_vtable_rva = 0xD519D0;
 std::uint32_t restore_invoke_rva = 0x8DAA10;
 std::uint32_t restore_caller_rva = 0x8D762F;
+std::uint32_t construction_caller_rva = 0x62BD68;
 std::uint32_t sites_initialize_caller_rva = 0x5FA126;
 std::uint32_t sites_scene_entry_caller_rva = 0x95815C;
 std::uint32_t sites_scene_tick_caller_rva = 0x9586CE;
@@ -378,5 +384,7 @@ struct GameBindings {
     build_bindings::AssistantHeaderContract assistant_header_contract;
 };
 extern const GameBindings october_bindings;
+extern const GameBindings september16_bindings;
+extern const GameBindings september30_bindings;
 inline const GameBindings& game_bindings(ImageRange image) noexcept { return *image.bindings; }
 }

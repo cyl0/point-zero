@@ -29,6 +29,7 @@ CategoryLifeSites admit_category_lifecycle_contract(MemoryView memory, const Ima
     result.restore_invoke = base + bindings.restore_invoke_rva;
     result.manager_slot = base + game_bindings(game.range).category_generations.category_manager_rva;
     result.restore_caller = base + bindings.restore_caller_rva;
+    result.construction_caller = base + bindings.construction_caller_rva;
     return result;
 }
 }

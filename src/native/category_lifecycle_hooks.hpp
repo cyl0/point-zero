@@ -55,7 +55,7 @@ struct CategoryLifeSites {
     std::array<CategoryLifeSite, 13> entries; // queued_initialize through style_apply.
     CategoryLifeSite queued_restore;
     std::uintptr_t queue_caller{}, initialize_vtable{}, restore_vtable{}, restore_invoke{}, manager_slot{};
-    std::uintptr_t restore_caller{};
+    std::uintptr_t restore_caller{}, construction_caller{};
     std::uintptr_t initialize_caller{}; // Exact supported navigation-initializer return address.
     std::uintptr_t scene_entry_caller{}, scene_tick_caller{}, scene_vtable{}, idle_callback{};
     std::uintptr_t scene_refresh_caller{}; // Within the admitted scene_tick body.
