@@ -385,6 +385,7 @@ struct GameBindings {
 };
 extern const GameBindings october_bindings;
 extern const GameBindings september16_bindings;
+extern const GameBindings september16_012_bindings;
 extern const GameBindings september30_bindings;
 inline const GameBindings& game_bindings(ImageRange image) noexcept { return *image.bindings; }
 }
