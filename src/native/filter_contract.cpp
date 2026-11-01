@@ -24,7 +24,6 @@ FilterContract admit_filter_contract(MemoryView memory, const ImageInfo& game) {
     }
     result.sites.apply_caller = game.range.base + bindings.filter_apply_caller_rva;
     result.sites.level_caller = game.range.base + bindings.sites_level_caller_rva;
-    result.mode = reinterpret_cast<decltype(result.mode)>(callable(memory, game.range, bindings.mode_rva));
     result.rebuild = reinterpret_cast<decltype(result.rebuild)>(callable(memory, game.range, bindings.rebuild_rva));
     return result;
 }

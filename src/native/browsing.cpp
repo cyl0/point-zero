@@ -49,8 +49,7 @@ Admission admit(const AdapterContext& context) {
     calls.vectors = admit_category_vector_contract(memory, game);
     calls.selection = admit_category_restore_contract(memory, game);
     calls.requests = admit_category_request_calls(memory, game);
-    require(out.filter.mode == out.sort.calls.mode, "browsing mode contracts disagree");
-    calls.mode = out.filter.mode;
+    calls.mode = out.sort.calls.mode;
     calls.rebuild = out.filter.rebuild;
     calls.close = out.navigation.calls.close;
     calls.bank.set_difficulty = out.navigation.calls.set_difficulty;
@@ -106,7 +105,7 @@ void NativeBrowsing::prepare(std::span<const CategoryMetadataEntry> definitions)
     accessors_ = std::make_unique<CategoryAccessors>(memory, checked.accessors, ids);
     navigation_ = std::make_unique<CategoryNavigation>(memory, context_.modules.game.range,
         context_.state, checked.navigation.sites, checked.navigation.calls);
-    filter_ = std::make_unique<OriginalFilter>(context_, checked.filter.mode);
+    filter_ = std::make_unique<OriginalFilter>(context_);
     generations_ = std::make_unique<CategoryGenerations>(context_, checked.calls, retained,
         *accessors_, *navigation_, *filter_);
     auto owner = sort_owner(); owner.context = this;

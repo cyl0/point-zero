@@ -28,7 +28,6 @@ template<class T> bool read(MemoryView m, std::uintptr_t at, T& out) noexcept {
         return read_field(m, at, 0, out);
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
-bool browsing_mode(int mode) noexcept { return mode == 0 || mode == 6; }
 bool native_level(std::uintptr_t manager, std::uintptr_t category, int id, int style) noexcept {
     return id >= 13 && id <= 24 && style >= 0 && style < 2 &&
         category == manager + 16 + sizeof(category_layout::Category) * (226ULL * style + id);
@@ -165,8 +164,6 @@ void CategoryGenerations::reject_initialization() noexcept {
 bool CategoryGenerations::initialize(std::uintptr_t navigation) {
     const auto view = context_.state.view();
     if (view.phase != FeaturePhase::ready) return true;
-    const int mode = calls_.mode();
-    if (!browsing_mode(mode)) return true;
     std::uintptr_t manager{}, list{}, group{};
     int style{}, list_style{};
     const auto game = context_.modules.game.range;
@@ -266,7 +263,6 @@ bool CategoryGenerations::tick_context(std::uintptr_t scene, Tick& out) {
     out.manager = current_->manager; out.list = current_->list; out.view = context_.state.view();
     if (out.view.phase != FeaturePhase::ready || out.view.battle) return false;
     out.mode = calls_.mode();
-    if (!browsing_mode(out.mode)) return false;
     const auto game = context_.modules.game.range.base;
     std::uintptr_t manager{}, list{}, target{}, callback{}, queued{};
     int adjustment{}, style{};
@@ -438,8 +434,6 @@ bool CategoryGenerations::route_return(const CategoryLifeRequest& request) {
     if (request.refresh_restore) return route_style(request);
     if (!context_.state.view().enabled()) return true;
     if (returning_depth_ || initializing_depth_ || changing_ || restoring_ || requesting_) return false;
-    const int mode = calls_.mode();
-    if (!browsing_mode(mode)) return true;
     int group{};
     if (!selected_group_id(context_.memory, g.list, group)) return false;
     if (group != 1) return true; // Preserve native group overrides on entry.
@@ -514,7 +508,6 @@ bool CategoryGenerations::before_refresh(const CategoryLifeRequest& request) {
         request.owner > UINTPTR_MAX - 0x4B8 || request.owner + 0x4B8 != current_->navigation) return true;
     if (view.phase != FeaturePhase::ready) return true;
     const int mode = calls_.mode();
-    if (!browsing_mode(mode)) return true;
     if (refreshing_depth_ || initializing_depth_ || changing_ || restoring_ || returning_depth_ || requesting_) return false;
     auto& g = *current_;
     if (g.repair_style >= 0) {
@@ -790,7 +783,6 @@ bool CategoryGenerations::capture(Selection& out) {
     out.view = context_.state.view();
     if (out.view.phase != FeaturePhase::ready) return false;
     out.mode = calls_.mode();
-    if (!browsing_mode(out.mode)) return false;
     std::uintptr_t manager{}, list{};
     int list_style{};
     std::uint8_t busy{}, editor{};
@@ -1199,8 +1191,6 @@ CategoryRequestResult CategoryGenerations::route_request(const CategoryRequest& 
     if (!context_.state.view().enabled()) return reject;
     if (requesting_ || collecting_ || changing_ || building_ || summary_ || initializing_depth_ ||
         refreshing_depth_ || restoring_ || returning_depth_) return reject;
-    const int mode = calls_.mode();
-    if (!browsing_mode(mode)) return reject;
     std::uint8_t busy{};
     if (!read(context_.memory, g.navigation + 6, busy)) { fault(); return reject; }
     if (busy) return reject; // Same later native guard; do not mutate the page before it.

@@ -36,8 +36,8 @@ FilterDecision run(const AdapterContext& context, const OriginalFilterState& own
     return level < observed.lower || level > observed.upper ? FilterDecision::reject : FilterDecision::accept;
 }
 } // namespace
-OriginalFilter::OriginalFilter(const AdapterContext& context, Mode mode) : context_(context), mode_(mode) {
-    if (!context.memory.read || !mode) throw std::invalid_argument("incomplete Original Filter dependencies");
+OriginalFilter::OriginalFilter(const AdapterContext& context) : context_(context) {
+    if (!context.memory.read) throw std::invalid_argument("incomplete Original Filter dependencies");
 }
 void OriginalFilter::prepare() {
     if (attempted_) throw std::runtime_error("Original Filter preparation already attempted");
@@ -66,8 +66,6 @@ void OriginalFilter::begin(Frame& frame, bool effective) noexcept {
             request.set != 1 || request.style < 0 || request.style > 1 ||
             !(request.category == 119 || (request.category >= 219 && request.category <= 223)) ||
             request.candidate != game.base + game_bindings(context_.modules.game.range).original_filter.filter_candidate_state_rva) return;
-        const auto mode = mode_();
-        if (mode != 0 && mode != 6) return;
         std::uintptr_t manager{};
         if (!read_field(context_.memory, game.base, game_bindings(context_.modules.game.range).original_filter.category_manager_rva, manager) || manager < 0x10000) return;
         const auto offset = 16 + 208 * (226ULL * request.style + request.category);
@@ -125,8 +123,6 @@ bool OriginalFilter::rebuild_owner(Rebuild& out) const {
         return false;
     out.view = context_.state.view();
     if (out.view.phase != FeaturePhase::ready) return false;
-    out.mode = mode_();
-    if (out.mode != 0 && out.mode != 6) return false;
     std::uintptr_t vtable{};
     int menu_id{}, menu_set{};
     std::uint8_t has_set{};
