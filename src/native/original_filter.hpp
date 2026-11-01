@@ -11,9 +11,8 @@ using FilterWorkingSetter = void (__fastcall*)(std::uintptr_t category, int diff
 
 class OriginalFilter final {
 public:
-    using Mode = int (__fastcall*)();
     // Adapter catalogue remains immutable for this owner's lifetime.
-    OriginalFilter(const AdapterContext&, Mode);
+    explicit OriginalFilter(const AdapterContext&);
     OriginalFilter(const OriginalFilter&) = delete;
     OriginalFilter& operator=(const OriginalFilter&) = delete;
     void prepare(); // One attempt on the future native application thread.
@@ -49,11 +48,10 @@ private:
         bool eligible{}, used{}, failed{}, querying{};
     };
     AdapterContext context_;
-    Mode mode_;
     Frame* scope_{};
     struct Rebuild {
         std::uintptr_t category{}, manager{}, list{}, active{}, saved{};
-        int id{}, style{}, mode{}, inserted{};
+        int id{}, style{}, inserted{};
         std::array<int, 2> difficulty{};
         category_layout::Vector charts{};
         FeatureView view{};

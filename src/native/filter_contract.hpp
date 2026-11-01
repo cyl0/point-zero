@@ -6,7 +6,6 @@
 namespace point_zero::native {
 struct FilterContract {
     FilterSites sites;
-    int (__fastcall* mode)(){};
     NativeFilterRebuild rebuild{};
 };
 

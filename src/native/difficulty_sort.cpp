@@ -74,7 +74,7 @@ bool DifficultySort::observe(Context& out) const {
     if (out.dp && out.players == 2) out.players = 1;
     if (out.players < 1 || out.players > 2 || (out.players == 2 && out.style != 0)) return false;
     out.mode = calls_.mode();
-    return out.mode == 0 || out.mode == 6;
+    return true;
 }
 bool DifficultySort::run(const SortRequest& request, NativeQSort original) {
     const auto game = context_.modules.game.range;
