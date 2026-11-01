@@ -48,6 +48,10 @@ constexpr GameBuildIdentity tested_2026101300{
     0x6AC5F8CE, 0x0C5FE000, 0x00B0294C,
     {0x27, 0x07, 0x78, 0x2B, 0x5F, 0x45, 0x9B, 0x4E,
      0xBA, 0xD3, 0x75, 0xE7, 0x65, 0x5F, 0x82, 0xCC}, 1};
+constexpr GameBuildIdentity qualified_2026102700{
+    0x6AD9970D, 0x0C5A3000, 0x00ADFD5C,
+    {0xF7, 0xD3, 0xA1, 0xE4, 0x80, 0xB8, 0x61, 0x42,
+     0x9A, 0x94, 0xDC, 0x05, 0xB7, 0xBF, 0x21, 0xDA}, 1};
 } // namespace
 
 GameBuildIdentity inspect_game_build(MemoryView memory, const ImageInfo& image) {
@@ -100,6 +104,7 @@ constexpr GameBuild builds[]{
     {tested_2026091600_012, "2026091600-012", &september16_012_bindings},
     {tested_2026093000, "2026093000", &september30_bindings},
     {tested_2026101300, "2026101300", &october_bindings},
+    {qualified_2026102700, "2026102700", &october27_bindings},
 };
 }
 const GameBuild& select_game_build(MemoryView memory, const ImageInfo& image) {

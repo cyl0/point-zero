@@ -384,6 +384,7 @@ struct GameBindings {
     build_bindings::AssistantHeaderContract assistant_header_contract;
 };
 extern const GameBindings october_bindings;
+extern const GameBindings october27_bindings;
 extern const GameBindings september16_bindings;
 extern const GameBindings september16_012_bindings;
 extern const GameBindings september30_bindings;
